@@ -1,15 +1,15 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
 Sistema RAG (Retrieval Augmented Generation)
 -------------------------------------------
-Módulo responsável pelo sistema RAG para carregar documentos e dados
-de repositórios GitHub.
+MÃ³dulo responsÃ¡vel pelo sistema RAG para carregar documentos e dados
+de repositÃ³rios GitHub.
 
 Autor: [Seu Nome]
 Data: 01/07/2025
-Versão: 0.1.0
+VersÃ£o: 0.1.0
 """
 
 import os
@@ -47,7 +47,7 @@ class RAGSystem:
         self.logger = logger
         self.index = None
         
-        # Criar diretório de dados se não existir
+        # Criar diretÃ³rio de dados se nÃ£o existir
         os.makedirs(self.data_dir, exist_ok=True)
     
     def load_document(self, file_path: str) -> Optional[Document]:
@@ -74,12 +74,12 @@ class RAGSystem:
             return None
     
     def load_documents_from_directory(self, directory: str, extensions: List[str] = None) -> List[Document]:
-        """Carrega documentos de um diretório"""
+        """Carrega documentos de um diretÃ³rio"""
         loaded_docs = []
         directory = Path(directory)
         
         if not directory.exists():
-            self.logger.error(f"Diretório não encontrado: {directory}")
+            self.logger.error(f"DiretÃ³rio nÃ£o encontrado: {directory}")
             return loaded_docs
         
         extensions = extensions or [".txt", ".md", ".py", ".js", ".html", ".css", ".json"]
@@ -91,20 +91,20 @@ class RAGSystem:
                     if doc:
                         loaded_docs.append(doc)
             
-            self.logger.info(f"Documentos carregados do diretório {directory}: {len(loaded_docs)}")
+            self.logger.info(f"Documentos carregados do diretÃ³rio {directory}: {len(loaded_docs)}")
             return loaded_docs
         except Exception as e:
-            self.logger.error(f"Erro ao carregar documentos do diretório {directory}: {e}")
+            self.logger.error(f"Erro ao carregar documentos do diretÃ³rio {directory}: {e}")
             return loaded_docs
     
     def load_from_github(self, repo_url: str, branch: str = "main") -> List[Document]:
-        """Carrega documentos de um repositório GitHub"""
+        """Carrega documentos de um repositÃ³rio GitHub"""
         loaded_docs = []
         
         # Extrair owner/repo do URL
         parts = repo_url.rstrip("/").split("/")
         if "github.com" not in repo_url or len(parts) < 5:
-            self.logger.error(f"URL de repositório GitHub inválido: {repo_url}")
+            self.logger.error(f"URL de repositÃ³rio GitHub invÃ¡lido: {repo_url}")
             return loaded_docs
         
         owner, repo = parts[-2], parts[-1]
@@ -138,7 +138,7 @@ class RAGSystem:
                         loaded_docs.append(doc)
                         self.logger.info(f"Documento carregado do GitHub: {file_path}")
             
-            self.logger.info(f"Documentos carregados do repositório {owner}/{repo}: {len(loaded_docs)}")
+            self.logger.info(f"Documentos carregados do repositÃ³rio {owner}/{repo}: {len(loaded_docs)}")
             return loaded_docs
         except Exception as e:
             self.logger.error(f"Erro ao carregar documentos do GitHub {repo_url}: {e}")
@@ -165,7 +165,7 @@ class RAGSystem:
             input_path = self.data_dir / input_file
             
             if not input_path.exists():
-                self.logger.warning(f"Arquivo de documentos não encontrado: {input_path}")
+                self.logger.warning(f"Arquivo de documentos nÃ£o encontrado: {input_path}")
                 return False
             
             with open(input_path, 'r', encoding='utf-8') as f:
@@ -180,7 +180,7 @@ class RAGSystem:
 
 
 if __name__ == "__main__":
-    # Teste básico
+    # Teste bÃ¡sico
     logging.basicConfig(level=logging.INFO)
     rag = RAGSystem()
     # Exemplo de uso

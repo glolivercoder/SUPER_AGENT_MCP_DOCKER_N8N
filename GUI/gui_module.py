@@ -1,14 +1,14 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
-Módulo de Interface Gráfica
+MÃ³dulo de Interface GrÃ¡fica
 --------------------------
-Interface gráfica para o SUPER_AGENT_MCP_DOCKER_N8N.
+Interface grÃ¡fica para o SUPER_AGENT_MCP_DOCKER_N8N.
 
 Autor: [Seu Nome]
 Data: 01/07/2025
-Versão: 0.1.0
+VersÃ£o: 0.1.0
 """
 
 import os
@@ -22,12 +22,12 @@ from pathlib import Path
 logger = logging.getLogger("GUI_MODULE")
 
 class SuperAgentGUI:
-    """Interface gráfica para o SUPER_AGENT_MCP_DOCKER_N8N"""
+    """Interface grÃ¡fica para o SUPER_AGENT_MCP_DOCKER_N8N"""
     
     def __init__(self, root=None):
         self.logger = logger
         
-        # Configuração da janela principal
+        # ConfiguraÃ§Ã£o da janela principal
         if root is None:
             self.root = tk.Tk()
         else:
@@ -36,11 +36,11 @@ class SuperAgentGUI:
         self.root.title("SUPER_AGENT_MCP_DOCKER_N8N")
         self.root.geometry("900x600")
         
-        # Configuração de estilo
+        # ConfiguraÃ§Ã£o de estilo
         self.style = ttk.Style()
         self.style.theme_use("clam")  # Tema mais moderno
         
-        # Variáveis
+        # VariÃ¡veis
         self.mcp_configs = {}
         self.current_ide = tk.StringVar(value="cursor")
         
@@ -48,7 +48,7 @@ class SuperAgentGUI:
         self._create_menu()
         self._create_notebook()
         
-        self.logger.info("Interface gráfica inicializada")
+        self.logger.info("Interface grÃ¡fica inicializada")
     
     def _create_menu(self):
         """Cria o menu principal"""
@@ -56,8 +56,8 @@ class SuperAgentGUI:
         
         # Menu Arquivo
         file_menu = tk.Menu(menu_bar, tearoff=0)
-        file_menu.add_command(label="Carregar Configuração", command=self._load_config)
-        file_menu.add_command(label="Salvar Configuração", command=self._save_config)
+        file_menu.add_command(label="Carregar ConfiguraÃ§Ã£o", command=self._load_config)
+        file_menu.add_command(label="Salvar ConfiguraÃ§Ã£o", command=self._save_config)
         file_menu.add_separator()
         file_menu.add_command(label="Sair", command=self.root.quit)
         menu_bar.add_cascade(label="Arquivo", menu=file_menu)
@@ -72,7 +72,7 @@ class SuperAgentGUI:
         # Menu Ajuda
         help_menu = tk.Menu(menu_bar, tearoff=0)
         help_menu.add_command(label="Sobre", command=self._show_about)
-        help_menu.add_command(label="Documentação", command=self._show_docs)
+        help_menu.add_command(label="DocumentaÃ§Ã£o", command=self._show_docs)
         menu_bar.add_cascade(label="Ajuda", menu=help_menu)
         
         self.root.config(menu=menu_bar)
@@ -97,14 +97,14 @@ class SuperAgentGUI:
         self.notebook.add(self.rag_frame, text="RAG")
         self._create_rag_tab()
         
-        # Aba de Configurações
+        # Aba de ConfiguraÃ§Ãµes
         self.settings_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.settings_frame, text="Configurações")
+        self.notebook.add(self.settings_frame, text="ConfiguraÃ§Ãµes")
         self._create_settings_tab()
     
     def _create_mcp_tab(self):
         """Cria a aba de MCPs"""
-        # Frame superior para seleção de IDE
+        # Frame superior para seleÃ§Ã£o de IDE
         top_frame = ttk.Frame(self.mcp_frame)
         top_frame.pack(fill=tk.X, padx=10, pady=10)
         
@@ -118,7 +118,7 @@ class SuperAgentGUI:
         ttk.Button(top_frame, text="Compartilhar MCPs", command=self._share_mcps).pack(side=tk.LEFT, padx=5)
         
         # Frame para lista de MCPs
-        list_frame = ttk.LabelFrame(self.mcp_frame, text="MCPs Disponíveis")
+        list_frame = ttk.LabelFrame(self.mcp_frame, text="MCPs DisponÃ­veis")
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Treeview para mostrar MCPs
@@ -142,19 +142,19 @@ class SuperAgentGUI:
     
     def _create_docker_tab(self):
         """Cria a aba de Docker"""
-        # Frame superior para ações
+        # Frame superior para aÃ§Ãµes
         top_frame = ttk.Frame(self.docker_frame)
         top_frame.pack(fill=tk.X, padx=10, pady=10)
         
         ttk.Button(top_frame, text="Verificar Docker", command=self._check_docker).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top_frame, text="Listar Contêineres", command=self._list_containers).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top_frame, text="Listar ContÃªineres", command=self._list_containers).pack(side=tk.LEFT, padx=5)
         ttk.Button(top_frame, text="Iniciar N8N", command=self._start_n8n).pack(side=tk.LEFT, padx=5)
         
-        # Frame para lista de contêineres
-        list_frame = ttk.LabelFrame(self.docker_frame, text="Contêineres Docker")
+        # Frame para lista de contÃªineres
+        list_frame = ttk.LabelFrame(self.docker_frame, text="ContÃªineres Docker")
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Treeview para mostrar contêineres
+        # Treeview para mostrar contÃªineres
         columns = ("id", "nome", "status", "portas")
         self.docker_tree = ttk.Treeview(list_frame, columns=columns, show="headings")
         
@@ -177,17 +177,17 @@ class SuperAgentGUI:
     
     def _create_rag_tab(self):
         """Cria a aba de RAG"""
-        # Frame superior para ações
+        # Frame superior para aÃ§Ãµes
         top_frame = ttk.Frame(self.rag_frame)
         top_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        ttk.Button(top_frame, text="Carregar Diretório", command=self._load_directory).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top_frame, text="Carregar DiretÃ³rio", command=self._load_directory).pack(side=tk.LEFT, padx=5)
         ttk.Button(top_frame, text="Carregar GitHub", command=self._load_github).pack(side=tk.LEFT, padx=5)
         ttk.Button(top_frame, text="Salvar Documentos", command=self._save_documents).pack(side=tk.LEFT, padx=5)
         ttk.Button(top_frame, text="Carregar Documentos", command=self._load_documents).pack(side=tk.LEFT, padx=5)
         
         # Frame para entrada de GitHub
-        github_frame = ttk.LabelFrame(self.rag_frame, text="Repositório GitHub")
+        github_frame = ttk.LabelFrame(self.rag_frame, text="RepositÃ³rio GitHub")
         github_frame.pack(fill=tk.X, padx=10, pady=10)
         
         ttk.Label(github_frame, text="URL:").pack(side=tk.LEFT, padx=5)
@@ -224,29 +224,29 @@ class SuperAgentGUI:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     
     def _create_settings_tab(self):
-        """Cria a aba de configurações"""
-        # Frame para configurações gerais
-        general_frame = ttk.LabelFrame(self.settings_frame, text="Configurações Gerais")
+        """Cria a aba de configuraÃ§Ãµes"""
+        # Frame para configuraÃ§Ãµes gerais
+        general_frame = ttk.LabelFrame(self.settings_frame, text="ConfiguraÃ§Ãµes Gerais")
         general_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        # Diretório de logs
+        # DiretÃ³rio de logs
         log_frame = ttk.Frame(general_frame)
         log_frame.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(log_frame, text="Diretório de Logs:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(log_frame, text="DiretÃ³rio de Logs:").pack(side=tk.LEFT, padx=5)
         self.log_dir = tk.StringVar(value="logs")
         ttk.Entry(log_frame, textvariable=self.log_dir, width=40).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         ttk.Button(log_frame, text="...", width=3, command=self._select_log_dir).pack(side=tk.LEFT, padx=5)
         
-        # Nível de log
+        # NÃ­vel de log
         log_level_frame = ttk.Frame(general_frame)
         log_level_frame.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(log_level_frame, text="Nível de Log:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(log_level_frame, text="NÃ­vel de Log:").pack(side=tk.LEFT, padx=5)
         self.log_level = tk.StringVar(value="INFO")
         ttk.Combobox(log_level_frame, textvariable=self.log_level, 
                      values=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]).pack(side=tk.LEFT, padx=5)
         
-        # Frame para configurações de N8N
-        n8n_frame = ttk.LabelFrame(self.settings_frame, text="Configurações do N8N")
+        # Frame para configuraÃ§Ãµes de N8N
+        n8n_frame = ttk.LabelFrame(self.settings_frame, text="ConfiguraÃ§Ãµes do N8N")
         n8n_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # Porta do N8N
@@ -256,41 +256,41 @@ class SuperAgentGUI:
         self.n8n_port = tk.StringVar(value="5678")
         ttk.Entry(port_frame, textvariable=self.n8n_port, width=10).pack(side=tk.LEFT, padx=5)
         
-        # Diretório de dados do N8N
+        # DiretÃ³rio de dados do N8N
         data_frame = ttk.Frame(n8n_frame)
         data_frame.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(data_frame, text="Diretório de Dados:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(data_frame, text="DiretÃ³rio de Dados:").pack(side=tk.LEFT, padx=5)
         self.n8n_data_dir = tk.StringVar(value="./n8n_data")
         ttk.Entry(data_frame, textvariable=self.n8n_data_dir, width=40).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         ttk.Button(data_frame, text="...", width=3, command=self._select_n8n_data_dir).pack(side=tk.LEFT, padx=5)
         
-        # Botões de ação
+        # BotÃµes de aÃ§Ã£o
         button_frame = ttk.Frame(self.settings_frame)
         button_frame.pack(fill=tk.X, padx=10, pady=20)
-        ttk.Button(button_frame, text="Salvar Configurações", command=self._save_settings).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Carregar Configurações", command=self._load_settings).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Salvar ConfiguraÃ§Ãµes", command=self._save_settings).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Carregar ConfiguraÃ§Ãµes", command=self._load_settings).pack(side=tk.RIGHT, padx=5)
     
-    # Métodos de callback
+    # MÃ©todos de callback
     def _load_config(self):
-        """Carrega uma configuração de arquivo"""
+        """Carrega uma configuraÃ§Ã£o de arquivo"""
         file_path = filedialog.askopenfilename(
-            title="Selecionar arquivo de configuração",
+            title="Selecionar arquivo de configuraÃ§Ã£o",
             filetypes=[("Arquivos JSON", "*.json"), ("Todos os arquivos", "*.*")]
         )
         if file_path:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                self.logger.info(f"Configuração carregada de {file_path}")
-                messagebox.showinfo("Sucesso", "Configuração carregada com sucesso!")
+                self.logger.info(f"ConfiguraÃ§Ã£o carregada de {file_path}")
+                messagebox.showinfo("Sucesso", "ConfiguraÃ§Ã£o carregada com sucesso!")
             except Exception as e:
-                self.logger.error(f"Erro ao carregar configuração: {e}")
-                messagebox.showerror("Erro", f"Erro ao carregar configuração: {e}")
+                self.logger.error(f"Erro ao carregar configuraÃ§Ã£o: {e}")
+                messagebox.showerror("Erro", f"Erro ao carregar configuraÃ§Ã£o: {e}")
     
     def _save_config(self):
-        """Salva a configuração em um arquivo"""
+        """Salva a configuraÃ§Ã£o em um arquivo"""
         file_path = filedialog.asksaveasfilename(
-            title="Salvar arquivo de configuração",
+            title="Salvar arquivo de configuraÃ§Ã£o",
             defaultextension=".json",
             filetypes=[("Arquivos JSON", "*.json"), ("Todos os arquivos", "*.*")]
         )
@@ -304,121 +304,121 @@ class SuperAgentGUI:
                 }
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(config, f, indent=2, ensure_ascii=False)
-                self.logger.info(f"Configuração salva em {file_path}")
-                messagebox.showinfo("Sucesso", "Configuração salva com sucesso!")
+                self.logger.info(f"ConfiguraÃ§Ã£o salva em {file_path}")
+                messagebox.showinfo("Sucesso", "ConfiguraÃ§Ã£o salva com sucesso!")
             except Exception as e:
-                self.logger.error(f"Erro ao salvar configuração: {e}")
-                messagebox.showerror("Erro", f"Erro ao salvar configuração: {e}")
+                self.logger.error(f"Erro ao salvar configuraÃ§Ã£o: {e}")
+                messagebox.showerror("Erro", f"Erro ao salvar configuraÃ§Ã£o: {e}")
     
     def _detect_mcps(self):
         """Detecta MCPs instalados"""
-        messagebox.showinfo("Informação", "Detectando MCPs instalados...")
-        # Implementar lógica para detectar MCPs
+        messagebox.showinfo("InformaÃ§Ã£o", "Detectando MCPs instalados...")
+        # Implementar lÃ³gica para detectar MCPs
     
     def _check_docker(self):
-        """Verifica se o Docker está instalado"""
-        messagebox.showinfo("Informação", "Verificando instalação do Docker...")
-        # Implementar lógica para verificar Docker
+        """Verifica se o Docker estÃ¡ instalado"""
+        messagebox.showinfo("InformaÃ§Ã£o", "Verificando instalaÃ§Ã£o do Docker...")
+        # Implementar lÃ³gica para verificar Docker
     
     def _start_n8n(self):
-        """Inicia o contêiner N8N"""
+        """Inicia o contÃªiner N8N"""
         port = self.n8n_port.get()
         data_dir = self.n8n_data_dir.get()
-        messagebox.showinfo("Informação", f"Iniciando N8N na porta {port}...")
-        # Implementar lógica para iniciar N8N
+        messagebox.showinfo("InformaÃ§Ã£o", f"Iniciando N8N na porta {port}...")
+        # Implementar lÃ³gica para iniciar N8N
     
     def _on_ide_selected(self, event):
-        """Callback quando uma IDE é selecionada"""
+        """Callback quando uma IDE Ã© selecionada"""
         ide = self.current_ide.get()
         self.logger.info(f"IDE selecionada: {ide}")
         # Atualizar lista de MCPs para a IDE selecionada
     
     def _share_mcps(self):
         """Compartilha MCPs entre IDEs"""
-        messagebox.showinfo("Informação", "Compartilhando MCPs entre IDEs...")
-        # Implementar lógica para compartilhar MCPs
+        messagebox.showinfo("InformaÃ§Ã£o", "Compartilhando MCPs entre IDEs...")
+        # Implementar lÃ³gica para compartilhar MCPs
     
     def _list_containers(self):
-        """Lista os contêineres Docker em execução"""
-        messagebox.showinfo("Informação", "Listando contêineres Docker...")
-        # Implementar lógica para listar contêineres
+        """Lista os contÃªineres Docker em execuÃ§Ã£o"""
+        messagebox.showinfo("InformaÃ§Ã£o", "Listando contÃªineres Docker...")
+        # Implementar lÃ³gica para listar contÃªineres
     
     def _load_directory(self):
-        """Carrega documentos de um diretório"""
-        directory = filedialog.askdirectory(title="Selecionar diretório de documentos")
+        """Carrega documentos de um diretÃ³rio"""
+        directory = filedialog.askdirectory(title="Selecionar diretÃ³rio de documentos")
         if directory:
-            messagebox.showinfo("Informação", f"Carregando documentos de {directory}...")
-            # Implementar lógica para carregar documentos
+            messagebox.showinfo("InformaÃ§Ã£o", f"Carregando documentos de {directory}...")
+            # Implementar lÃ³gica para carregar documentos
     
     def _load_github(self):
-        """Carrega documentos de um repositório GitHub"""
+        """Carrega documentos de um repositÃ³rio GitHub"""
         url = self.github_url.get()
         branch = self.github_branch.get()
         if url:
-            messagebox.showinfo("Informação", f"Carregando documentos de {url} (branch: {branch})...")
-            # Implementar lógica para carregar documentos do GitHub
+            messagebox.showinfo("InformaÃ§Ã£o", f"Carregando documentos de {url} (branch: {branch})...")
+            # Implementar lÃ³gica para carregar documentos do GitHub
         else:
-            messagebox.showerror("Erro", "URL do repositório GitHub não especificada!")
+            messagebox.showerror("Erro", "URL do repositÃ³rio GitHub nÃ£o especificada!")
     
     def _save_documents(self):
         """Salva os documentos carregados"""
-        messagebox.showinfo("Informação", "Salvando documentos...")
-        # Implementar lógica para salvar documentos
+        messagebox.showinfo("InformaÃ§Ã£o", "Salvando documentos...")
+        # Implementar lÃ³gica para salvar documentos
     
     def _load_documents(self):
         """Carrega documentos salvos anteriormente"""
-        messagebox.showinfo("Informação", "Carregando documentos salvos...")
-        # Implementar lógica para carregar documentos salvos
+        messagebox.showinfo("InformaÃ§Ã£o", "Carregando documentos salvos...")
+        # Implementar lÃ³gica para carregar documentos salvos
     
     def _select_log_dir(self):
-        """Seleciona o diretório de logs"""
-        directory = filedialog.askdirectory(title="Selecionar diretório de logs")
+        """Seleciona o diretÃ³rio de logs"""
+        directory = filedialog.askdirectory(title="Selecionar diretÃ³rio de logs")
         if directory:
             self.log_dir.set(directory)
     
     def _select_n8n_data_dir(self):
-        """Seleciona o diretório de dados do N8N"""
-        directory = filedialog.askdirectory(title="Selecionar diretório de dados do N8N")
+        """Seleciona o diretÃ³rio de dados do N8N"""
+        directory = filedialog.askdirectory(title="Selecionar diretÃ³rio de dados do N8N")
         if directory:
             self.n8n_data_dir.set(directory)
     
     def _save_settings(self):
-        """Salva as configurações"""
-        messagebox.showinfo("Informação", "Salvando configurações...")
-        # Implementar lógica para salvar configurações
+        """Salva as configuraÃ§Ãµes"""
+        messagebox.showinfo("InformaÃ§Ã£o", "Salvando configuraÃ§Ãµes...")
+        # Implementar lÃ³gica para salvar configuraÃ§Ãµes
     
     def _load_settings(self):
-        """Carrega as configurações"""
-        messagebox.showinfo("Informação", "Carregando configurações...")
-        # Implementar lógica para carregar configurações
+        """Carrega as configuraÃ§Ãµes"""
+        messagebox.showinfo("InformaÃ§Ã£o", "Carregando configuraÃ§Ãµes...")
+        # Implementar lÃ³gica para carregar configuraÃ§Ãµes
     
     def _show_about(self):
-        """Mostra informações sobre o aplicativo"""
+        """Mostra informaÃ§Ãµes sobre o aplicativo"""
         messagebox.showinfo(
             "Sobre",
             "SUPER_AGENT_MCP_DOCKER_N8N\n"
-            "Versão 0.1.0\n\n"
+            "VersÃ£o 0.1.0\n\n"
             "Agente especializado para integrar MCPs de diferentes IDEs, "
-            "coordenar comandos, iniciar serviços e analisar prompts."
+            "coordenar comandos, iniciar serviÃ§os e analisar prompts."
         )
     
     def _show_docs(self):
-        """Mostra a documentação"""
-        messagebox.showinfo("Documentação", "Abrindo documentação...")
-        # Implementar lógica para abrir documentação
+        """Mostra a documentaÃ§Ã£o"""
+        messagebox.showinfo("DocumentaÃ§Ã£o", "Abrindo documentaÃ§Ã£o...")
+        # Implementar lÃ³gica para abrir documentaÃ§Ã£o
     
     def run(self):
-        """Executa o loop principal da interface gráfica"""
+        """Executa o loop principal da interface grÃ¡fica"""
         self.root.mainloop()
 
 
 if __name__ == "__main__":
-    # Configuração de logging
+    # ConfiguraÃ§Ã£o de logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Iniciar interface gráfica
+    # Iniciar interface grÃ¡fica
     app = SuperAgentGUI()
     app.run() 
