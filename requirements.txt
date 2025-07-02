@@ -1,0 +1,71 @@
+# SUPER_AGENT_MCP_DOCKER_N8N - Requirements
+
+# Framework web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Interface gráfica
+pillow==10.1.0
+
+# Processamento de dados
+numpy==1.24.3
+pandas==2.0.3
+
+# Machine Learning / AI
+sentence-transformers==2.2.2
+torch==2.1.0
+transformers==4.35.0
+
+# Base de dados vetorial
+chromadb==0.4.15
+
+# Comunicação HTTP/WebSocket
+aiohttp==3.9.0
+websockets==12.0
+requests==2.31.0
+
+# Utilitários sistema
+psutil==5.9.6
+pathlib2==2.3.7
+
+# Serialização
+pydantic==2.5.0
+
+# Logs e configuração
+python-dotenv==1.0.0
+
+# Docker integration
+docker==6.1.3
+
+# N8N integration (será implementado manualmente)
+# n8n-client==0.1.0
+
+# OpenRouter integration
+# praisonaiagents[llm]==0.0.25
+
+# Playwright/Puppeteer para web automation
+playwright==1.40.0
+pyppeteer==1.0.2
+
+# Desenvolvimento e testes
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+
+# Documentação
+markdown==3.5.1
+mkdocs==1.5.3
+
+# Segurança
+cryptography==41.0.7
+python-jose[cryptography]==3.3.0
+
+# Monitoramento
+prometheus-client==0.19.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# CORS
+python-multipart==0.0.6 
