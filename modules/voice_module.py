@@ -158,24 +158,33 @@ class VoiceModule:
             self.tts_model = None
 
     def _init_stt(self):
-        """Inicializa o Vosk STT"""
+        """Inicializa o STT com fallback para SpeechRecognition"""
         try:
-            # Usar Vosk para STT (open source)
-            # Primeiro tentar carregar modelo em português
+            # Primeiro tentar Vosk (offline)
             model_paths = ["vosk-model-small-pt-0.3", "vosk-model-small-pt-br-0.3", "vosk-model-small-en-us-0.15"]
             
             for model_path in model_paths:
                 if os.path.exists(model_path):
                     self.stt_model = vosk.Model(model_path)
                     self.logger.info(f"Vosk STT inicializado com modelo: {model_path}")
+                    self.stt_type = "vosk"
                     break
             
-            if not self.stt_model:
-                self.logger.warning("Nenhum modelo Vosk encontrado. STT pode não funcionar.")
+            # Se Vosk não estiver disponível, usar SpeechRecognition como fallback
+            if not hasattr(self, 'stt_model') or not self.stt_model:
+                try:
+                    import speech_recognition as sr
+                    self.stt_recognizer = sr.Recognizer()
+                    self.stt_type = "speech_recognition"
+                    self.logger.info("SpeechRecognition STT inicializado como fallback")
+                except ImportError:
+                    self.logger.warning("SpeechRecognition não disponível")
+                    self.stt_type = None
                 
         except Exception as e:
-            self.logger.error(f"Erro ao inicializar Vosk STT: {e}")
+            self.logger.error(f"Erro ao inicializar STT: {e}")
             self.stt_model = None
+            self.stt_type = None
 
     def get_speakers(self) -> List[str]:
         """Retorna lista de speakers disponíveis"""
@@ -287,45 +296,8 @@ class VoiceModule:
             return audio
 
     def listen(self) -> Optional[str]:
-        """Captura áudio e converte para texto usando Vosk STT"""
-        if not self.stt_model:
-            self.logger.warning("STT não inicializado")
-            return None
-        
-        try:
-            # Configurações de gravação
-            duration = 5  # segundos
-            sample_rate = 16000  # Vosk recomenda 16kHz
-            
-            self.logger.info("Iniciando gravação...")
-            
-            # Gravar áudio
-            audio_data = sd.rec(
-                int(duration * sample_rate), 
-                samplerate=sample_rate, 
-                channels=1,
-                dtype=np.int16
-            )
-            sd.wait()
-            
-            # Converter para formato Vosk
-            rec = vosk.KaldiRecognizer(self.stt_model, sample_rate)
-            rec.AcceptWaveform(audio_data.tobytes())
-            
-            # Obter resultado
-            result = json.loads(rec.FinalResult())
-            text = result.get('text', '').strip()
-            
-            if text:
-                self.logger.info(f"Texto reconhecido: {text}")
-                return text
-            else:
-                self.logger.info("Nenhum texto reconhecido")
-                return None
-                
-        except Exception as e:
-            self.logger.error(f"Erro ao reconhecer fala: {e}")
-            return None
+        """Captura áudio e converte para texto usando STT disponível"""
+        return self.listen_once(timeout=5)
 
     def start_listening(self):
         """Inicia escuta contínua em thread separada"""
@@ -373,7 +345,8 @@ class VoiceModule:
         """Retorna status do módulo de voz"""
         return {
             "tts_ready": self.tts_model is not None,
-            "stt_ready": self.stt_model is not None,
+            "stt_ready": self.stt_model is not None or hasattr(self, 'stt_recognizer'),
+            "stt_type": getattr(self, 'stt_type', None),
             "current_speaker": self.current_speaker,
             "available_speakers": len(self.available_speakers),
             "is_listening": self.is_listening,
@@ -411,27 +384,54 @@ class VoiceModule:
             return None
         
         try:
-            # Configurações de gravação
-            sample_rate = 16000  # Vosk recomenda 16kHz
-            
-            self.logger.info(f"Iniciando gravação por {timeout} segundos...")
-            
-            # Gravar áudio
-            audio_data = sd.rec(
-                int(timeout * sample_rate), 
-                samplerate=sample_rate, 
-                channels=1,
-                dtype=np.int16
-            )
-            sd.wait()
-            
-            # Converter para formato Vosk
-            rec = vosk.KaldiRecognizer(self.stt_model, sample_rate)
-            rec.AcceptWaveform(audio_data.tobytes())
-            
-            # Obter resultado
-            result = json.loads(rec.FinalResult())
-            text = result.get('text', '').strip()
+            if self.stt_type == "vosk":
+                # Usar Vosk STT
+                sample_rate = 16000
+                
+                self.logger.info(f"Iniciando gravação por {timeout} segundos...")
+                
+                # Gravar áudio
+                audio_data = sd.rec(
+                    int(timeout * sample_rate), 
+                    samplerate=sample_rate, 
+                    channels=1,
+                    dtype=np.int16
+                )
+                sd.wait()
+                
+                # Converter para formato Vosk
+                rec = vosk.KaldiRecognizer(self.stt_model, sample_rate)
+                rec.AcceptWaveform(audio_data.tobytes())
+                
+                # Obter resultado
+                result = json.loads(rec.FinalResult())
+                text = result.get('text', '').strip()
+                
+            elif self.stt_type == "speech_recognition":
+                # Usar SpeechRecognition
+                import speech_recognition as sr
+                
+                self.logger.info(f"Iniciando gravação por {timeout} segundos...")
+                
+                recognizer = self.stt_recognizer  # self.stt_recognizer é um Recognizer neste caso
+                
+                with sr.Microphone() as source:
+                    recognizer.adjust_for_ambient_noise(source, duration=1)
+                    try:
+                        audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=timeout)
+                        text = recognizer.recognize_google(audio, language='pt-BR')
+                    except sr.WaitTimeoutError:
+                        self.logger.info("Timeout na gravação")
+                        return None
+                    except sr.UnknownValueError:
+                        self.logger.info("Fala não reconhecida")
+                        return None
+                    except sr.RequestError as e:
+                        self.logger.error(f"Erro na API de reconhecimento: {e}")
+                        return None
+            else:
+                self.logger.error("Tipo de STT não suportado")
+                return None
             
             if text:
                 self.logger.info(f"Texto reconhecido: {text}")
