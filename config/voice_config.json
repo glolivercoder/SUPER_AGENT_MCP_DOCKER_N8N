@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "language": "pt-BR",
+  "voice_rate": 150,
+  "voice_volume": 0.9,
+  "wake_word": "assistente",
+  "timeout": 5,
+  "phrase_time_limit": 10,
+  "energy_threshold": 4000,
+  "dynamic_energy_threshold": true,
+  "ambient_noise_duration": 1
+}
