@@ -26,6 +26,7 @@ from modules.rag_system import RAGSystem
 from modules.fe_agent import FeAgent
 from modules.voice_module import VoiceModule
 from modules.openrouter_manager import OpenRouterManager
+from modules.database_manager import DatabaseManager
 
 # Configuração de logging
 logging.basicConfig(
@@ -49,6 +50,7 @@ class SuperAgent:
         self.mcp_configs = {}
         
         # Inicializar módulos
+        self.database_manager = None
         self.mcp_manager = None
         self.docker_manager = None
         self.rag_system = None
@@ -64,6 +66,10 @@ class SuperAgent:
         try:
             # Criar diretório de logs se não existir
             os.makedirs("logs", exist_ok=True)
+            
+            # Inicializar Database Manager primeiro
+            self.database_manager = DatabaseManager()
+            self.logger.info("Database Manager inicializado")
             
             # Inicializar MCP Manager
             self.mcp_manager = MCPManager()
@@ -86,8 +92,8 @@ class SuperAgent:
             self._setup_voice_commands()
             self.logger.info("Voice Module inicializado")
             
-            # Inicializar OpenRouter Manager
-            self.openrouter_manager = OpenRouterManager()
+            # Inicializar OpenRouter Manager com Database Manager
+            self.openrouter_manager = OpenRouterManager(self.database_manager)
             self.logger.info("OpenRouter Manager inicializado")
             
         except Exception as e:
@@ -224,4 +230,19 @@ class SuperAgent:
 
 if __name__ == "__main__":
     agent = SuperAgent()
-    agent.run() 
+    agent.run()
+
+    # Inicializar GUI com injeção de dependências
+    import tkinter as tk
+    from GUI.gui_module import SuperAgentGUI
+
+    root = tk.Tk()
+    app = SuperAgentGUI(root)
+    # Injetar dependências
+    app.openrouter_manager = agent.openrouter_manager
+    app.rag_system = agent.rag_system
+    app.mcp_manager = agent.mcp_manager
+    app.docker_manager = agent.docker_manager
+    app.fe_agent = agent.fe_agent
+    app.voice_module = agent.voice_module
+    app.run() 
