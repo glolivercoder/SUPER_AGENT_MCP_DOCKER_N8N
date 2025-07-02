@@ -19,6 +19,10 @@ import json
 import logging
 from pathlib import Path
 
+# Configurar API Key do OpenRouter se não estiver definida
+if not os.getenv('OPENROUTER_API_KEY'):
+    os.environ['OPENROUTER_API_KEY'] = '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'
+
 # Importar módulos do sistema
 from modules.mcp_manager import MCPManager
 from modules.docker_manager import DockerManager
@@ -89,13 +93,11 @@ class SuperAgent:
             
             # Inicializar Voice Module
             self.voice_module = VoiceModule()
+            self._setup_voice_commands()
             self.logger.info("Voice Module inicializado")
             
-            # Configurar comandos de voz após inicialização
-            self._setup_voice_commands()
-            
-            # Inicializar OpenRouter Manager com Database Manager
-            self.openrouter_manager = OpenRouterManager(self.database_manager)
+            # Inicializar OpenRouter Manager
+            self.openrouter_manager = OpenRouterManager()
             self.logger.info("OpenRouter Manager inicializado")
             
         except Exception as e:
@@ -138,54 +140,14 @@ class SuperAgent:
     def load_mcp_configs(self):
         """Carrega as configurações de MCPs de diferentes IDEs"""
         try:
-            # Verificar se o diretório de configuração existe
-            self.config_dir = Path("config")
-            if not self.config_dir.exists():
-                self.config_dir.mkdir(exist_ok=True)
-                self.logger.warning(f"Diretório de configuração criado: {self.config_dir}")
-            
             config_files = list(self.config_dir.glob("*.json"))
-            if not config_files:
-                self.logger.warning("Nenhum arquivo de configuração MCP encontrado")
-                return
-                
             for config_file in config_files:
-                try:
-                    with open(config_file, 'r', encoding='utf-8') as f:
-                        config = json.load(f)
-                        self.mcp_configs[config_file.stem] = config
-                except json.JSONDecodeError as je:
-                    self.logger.error(f"Erro de formato JSON no arquivo {config_file}: {je}")
-                    # Tentar corrigir o arquivo com um modelo padrão
-                    self._create_default_config(config_file)
-                except Exception as e:
-                    self.logger.error(f"Erro ao ler arquivo {config_file}: {e}")
-                    
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.mcp_configs[config_file.stem] = config
             self.logger.info(f"Configurações de MCP carregadas: {list(self.mcp_configs.keys())}")
         except Exception as e:
             self.logger.error(f"Erro ao carregar configurações de MCP: {e}")
-    
-    def _create_default_config(self, config_file):
-        """Cria um arquivo de configuração padrão para uma IDE"""
-        try:
-            ide_name = config_file.stem.split('_')[0]  # Extrair nome da IDE do arquivo
-            
-            default_config = {
-                "name": ide_name,
-                "path": f"C:\\Users\\{os.getlogin()}\\AppData\\Roaming\\{ide_name.capitalize()}\\mcps",
-                "enabled": True,
-                "mcps": []
-            }
-            
-            with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(default_config, f, indent=2, ensure_ascii=False)
-                
-            self.logger.info(f"Criado arquivo de configuração padrão para {ide_name}")
-            self.mcp_configs[config_file.stem] = default_config
-            return True
-        except Exception as e:
-            self.logger.error(f"Erro ao criar configuração padrão: {e}")
-            return False
     
     def start_services(self):
         """Inicia os serviços necessários no diretório do projeto"""
@@ -280,7 +242,6 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     app = SuperAgentGUI(root)
-    
     # Injetar dependências
     app.openrouter_manager = agent.openrouter_manager
     app.rag_system = agent.rag_system
@@ -289,12 +250,7 @@ if __name__ == "__main__":
     app.fe_agent = agent.fe_agent
     app.voice_module = agent.voice_module
     
-    # Carregar speakers TTS após injeção
-    if app.voice_module:
-        app._load_silero_speakers()
-    
     # Carregar modelos OpenRouter após injeção
-    if app.openrouter_manager:
-        app._load_models()
+    app.load_models_after_injection()
     
     app.run() 

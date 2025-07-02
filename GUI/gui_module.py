@@ -71,11 +71,21 @@ class SuperAgentGUI:
         self._create_menu()
         self._create_main_interface()
         self.logger.info("Interface gráfica inicializada")
-        # Carregar modelos OpenRouter automaticamente ao iniciar
-        self._load_models()
+        # Não carregar modelos automaticamente - aguardar injeção de dependências
+        # self._load_models()
         # Adicionar alerta visual se não houver modelos carregados após o carregamento
-        self.root.after(3000, self._alerta_modelos_openrouter)
+        self.root.after(5000, self._alerta_modelos_openrouter)
     
+    def load_models_after_injection(self):
+        """Carrega modelos após a injeção de dependências"""
+        if hasattr(self, 'openrouter_manager') and self.openrouter_manager:
+            self.log_text.insert(tk.END, "Carregando modelos OpenRouter após injeção...\n")
+            self.log_text.see(tk.END)
+            self._load_models()
+        else:
+            self.log_text.insert(tk.END, "OpenRouter Manager não injetado ainda\n")
+            self.log_text.see(tk.END)
+
     def _create_menu(self):
         """Cria o menu principal"""
         menu_bar = tk.Menu(self.root)
@@ -905,90 +915,89 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         self.volume_slider.grid(row=5, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
         ttk.Label(frame, textvariable=self.volume_var, width=5).grid(row=5, column=3)
 
-        # Separador
-        ttk.Separator(frame, orient='horizontal').grid(row=6, column=0, columnspan=4, sticky=tk.E+tk.W, pady=10)
+        # Campo de texto para testar TTS
+        ttk.Label(frame, text="Texto de Teste:").grid(row=6, column=0, sticky=tk.W)
+        self.voice_test_entry = ttk.Entry(frame, width=40)
+        self.voice_test_entry.grid(row=6, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
+        ttk.Button(frame, text="Testar TTS", command=self._test_voice).grid(row=6, column=3, padx=5)
 
-        # Área de teste
-        ttk.Label(frame, text="Área de Teste de Voz", font=("Arial", 10, "bold")).grid(row=7, column=0, columnspan=4, sticky=tk.W, pady=(0, 5))
+        # Botão para abrir configurações de áudio do sistema
+        ttk.Button(frame, text="Abrir Config. de Áudio", command=self._open_system_audio).grid(row=11, column=0, columnspan=4, pady=(10,0))
 
-        # Entrada de texto para teste
-        ttk.Label(frame, text="Texto para teste:").grid(row=8, column=0, sticky=tk.W)
-        self.voice_test_entry = ttk.Entry(frame, width=50)
-        self.voice_test_entry.grid(row=8, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
-        self.voice_test_entry.insert(0, "Olá, este é um teste de voz em português do Brasil.")
-        ttk.Button(frame, text="Testar Voz", command=self._test_voice).grid(row=8, column=3, padx=5)
+        # Dispositivo de entrada
+        ttk.Label(frame, text="Microfone:").grid(row=10, column=0, sticky=tk.W, pady=(10,0))
+        self.mic_var = tk.StringVar()
+        self.mic_combo = ttk.Combobox(frame, textvariable=self.mic_var, state="readonly", width=40)
+        self.mic_combo.grid(row=10, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
+        ttk.Button(frame, text="Definir", command=self._on_mic_change).grid(row=10, column=3, padx=5, pady=(10,0))
 
-        # Status
-        self.voice_status_var = tk.StringVar(value="Status: Carregando vozes...")
-        ttk.Label(frame, textvariable=self.voice_status_var).grid(row=9, column=0, columnspan=4, sticky=tk.W, pady=(10, 0))
+        # Dropdown de engine STT
+        ttk.Label(frame, text="Reconhecimento de Voz (STT):").grid(row=7, column=0, sticky=tk.W)
+        
+        # Proteger acesso ao voice_module
+        stt_default = 'speech_recognition'
+        if self.voice_module and hasattr(self.voice_module, 'voice_config'):
+            stt_default = self.voice_module.voice_config.get('stt_engine', 'speech_recognition')
+        
+        self.stt_engine_var = tk.StringVar(value=stt_default)
+        self.stt_engine_combo = ttk.Combobox(frame, textvariable=self.stt_engine_var, state="readonly", width=20)
+        self.stt_engine_combo['values'] = ["speech_recognition", "vosk"]
+        self.stt_engine_combo.grid(row=7, column=1, padx=5, sticky=tk.W)
+        self.stt_engine_combo.bind("<<ComboboxSelected>>", self._on_stt_engine_change)
+        
+        # Status do STT
+        self.stt_status_label = ttk.Label(frame, text="Status STT: Verificando...", foreground="orange")
+        self.stt_status_label.grid(row=7, column=2, padx=5, sticky=tk.W)
+        
+        # Atualizar status do STT após um delay
+        self.root.after(1000, self._update_stt_status)
 
-        # Carregar opções de vozes do Silero
-        self._load_silero_speakers()
+        # Carregar dispositivos de áudio
+        self._load_audio_devices()
 
-    def _load_silero_speakers(self):
-        if self.voice_module and hasattr(self.voice_module, 'get_speakers'):
-            try:
-                # Obter todos os speakers
-                speakers = self.voice_module.get_speakers()
-                
-                # Obter speakers por idioma
-                speakers_by_lang = self.voice_module.get_speakers_by_language()
-                
-                # Configurar dropdown de idioma
-                languages = list(speakers_by_lang.keys())
-                language_names = {
-                    "pt": "Português",
-                    "en": "Inglês",
-                    "es": "Espanhol",
-                    "fr": "Francês",
-                    "de": "Alemão",
-                    "it": "Italiano",
-                    "ru": "Russo"
-                }
-                
-                language_display = [language_names.get(lang, lang) for lang in languages]
-                self.language_combo['values'] = language_display
-                
-                # Tentar selecionar português se disponível
-                if "pt" in languages:
-                    idx = languages.index("pt")
-                    self.language_combo.current(idx)
-                    self.language_var.set(language_display[idx])
-                    self._update_speakers_by_language("pt")
+    def _load_audio_devices(self):
+        """Carrega lista de microfones disponíveis"""
+        if self.voice_module:
+            devices = self.voice_module.get_input_devices()
+            self.mic_combo['values'] = devices
+            if devices:
+                # Selecionar previamente salvo se existir
+                saved_idx = self.voice_module.voice_config.get("input_device_index")
+                if saved_idx is not None and saved_idx < len(devices):
+                    self.mic_combo.current(saved_idx)
                 else:
-                    self.language_combo.current(0)
-                    self._update_speakers_by_language(languages[0])
-                
-                self.voice_status_var.set(f"Status: {len(speakers)} vozes disponíveis ({len(languages)} idiomas)")
-            except Exception as e:
-                self.voice_status_var.set(f"Erro ao carregar vozes: {e}")
-        else:
-            self.voice_status_var.set("Erro: Módulo de voz não inicializado")
-    
-    def _update_speakers_by_language(self, language_code):
-        """Atualiza lista de speakers com base no idioma selecionado"""
+                    self.mic_combo.current(0)
+
+    def _update_speakers_by_language(self, language_code: str = "pt"):
+        """Atualiza o combo de vozes de acordo com o idioma escolhido."""
         if not self.voice_module:
             return
-            
+
         try:
             speakers_by_lang = self.voice_module.get_speakers_by_language()
-            if language_code in speakers_by_lang:
-                speakers = speakers_by_lang[language_code]
-                
-                # Formatar nomes para exibição
-                speaker_display = []
-                for speaker in speakers:
-                    gender = self.voice_module.get_speaker_gender(speaker)
-                    speaker_display.append(f"{speaker} ({gender})")
-                
-                self.speaker_combo['values'] = speaker_display
-                
-                # Filtrar por gênero selecionado
-                self._on_gender_change()
-                
+            speakers = speakers_by_lang.get(language_code, []) or self.voice_module.get_speakers()
+
+            # Montar lista exibindo gênero na UI
+            display_speakers = []
+            for spk in speakers:
+                gender = self.voice_module.get_speaker_gender(spk)
+                display_speakers.append(f"{spk} ({gender})")
+
+            self.speaker_combo['values'] = display_speakers
+            if display_speakers:
+                self.speaker_combo.current(0)
+                # Atualiza variável vinculada e VoiceModule
+                self.speaker_var.set(display_speakers[0])
+                self._on_speaker_change()
         except Exception as e:
-            self.log_text.insert(tk.END, f"Erro ao atualizar speakers: {e}\n")
-    
+            self.logger.error(f"Erro ao atualizar speakers: {e}")
+
+    def _on_mic_change(self):
+        idx = self.mic_combo.current()
+        if self.voice_module:
+            self.voice_module.set_input_device(idx)
+            messagebox.showinfo("Microfone", f"Microfone definido para índice {idx}")
+
     def _on_language_change(self, event=None):
         """Quando o idioma é alterado"""
         language_display = self.language_var.get()
@@ -1052,6 +1061,46 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         text = self.voice_test_entry.get()
         if self.voice_module and text:
             self.voice_module.speak(text)
+
+    def _open_system_audio(self):
+        """Abre as configurações de áudio do sistema operacional"""
+        try:
+            import platform, os, subprocess
+            if platform.system() == "Windows":
+                os.startfile("ms-settings:sound")
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.sound"], check=False)
+            else:  # Linux (tentativa)
+                subprocess.run(["pavucontrol"], check=False)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Não foi possível abrir configurações de áudio: {e}")
+
+    def _on_stt_engine_change(self, event=None):
+        engine = self.stt_engine_var.get()
+        if self.voice_module:
+            self.voice_module.set_stt_engine(engine)
+            messagebox.showinfo("STT", f"Engine de reconhecimento de voz definido para: {engine}")
+            # Atualizar status após mudança
+            self._update_stt_status()
+
+    def _update_stt_status(self):
+        """Atualiza o status do STT na interface"""
+        if not self.voice_module:
+            self.stt_status_label.config(text="Status STT: Módulo não inicializado", foreground="red")
+            return
+            
+        try:
+            status = self.voice_module.get_status()
+            stt_ready = status.get('stt_ready', False)
+            stt_type = status.get('stt_type', 'Nenhum')
+            
+            if stt_ready:
+                self.stt_status_label.config(text=f"Status STT: {stt_type} (OK)", foreground="green")
+            else:
+                self.stt_status_label.config(text=f"Status STT: {stt_type} (Erro)", foreground="red")
+        except Exception as e:
+            self.stt_status_label.config(text="Status STT: Erro ao verificar", foreground="red")
+            self.logger.error(f"Erro ao atualizar status STT: {e}")
 
     def _init_mcps_tab(self):
         frame = ttk.Frame(self.mcps_tab)

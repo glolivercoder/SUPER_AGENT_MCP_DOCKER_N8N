@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_update": "2025-01-07T15:00:00Z",
+  "last_update": "2025-07-02T20:47:35.483670",
   "user_preferences": {
     "default_ide": "cursor",
     "voice_enabled": true,
@@ -17,7 +17,14 @@
       "description": "Agente principal para integração MCP com IDEs, coordenação de comandos, análise de prompts e deploy de serviços",
       "created_at": "2025-01-07T10:00:00Z",
       "last_accessed": "2025-01-07T15:00:00Z",
-      "technologies": ["Python", "Docker", "N8N", "Tkinter", "Azure Speech", "GitHub API"],
+      "technologies": [
+        "Python",
+        "Docker",
+        "N8N",
+        "Tkinter",
+        "Azure Speech",
+        "GitHub API"
+      ],
       "architecture": "microservices",
       "status": "em_desenvolvimento",
       "commands_used": [
@@ -29,7 +36,10 @@
       "mcps_configured": [
         {
           "ide": "cursor",
-          "mcps": ["supermemory", "filemanager"],
+          "mcps": [
+            "supermemory",
+            "filemanager"
+          ],
           "last_sync": "2025-01-07T14:30:00Z"
         }
       ],
@@ -75,7 +85,9 @@
         "date": "2025-01-07T15:35:00Z",
         "project_type": "Python",
         "git_status": "5 arquivos modificados",
-        "suggestions": ["Há arquivos modificados. Considere fazer commit."]
+        "suggestions": [
+          "Há arquivos modificados. Considere fazer commit."
+        ]
       }
     ],
     "voice_commands_history": [
@@ -96,13 +108,20 @@
     "use_ssml": true,
     "enable_voice_commands": true,
     "wake_word": "Super Agent",
-    "fe_wake_words": ["fê", "fe", "hey fê"]
+    "fe_wake_words": [
+      "fê",
+      "fe",
+      "hey fê"
+    ]
   },
   "ide_integrations": {
     "cursor": {
       "last_detected": "2025-01-07T14:30:00Z",
       "config_path": "C:\\Users\\AppData\\Roaming\\Cursor\\mcps",
-      "mcps_installed": ["supermemory", "filemanager"],
+      "mcps_installed": [
+        "supermemory",
+        "filemanager"
+      ],
       "auto_sync": true,
       "backup_enabled": true
     },
@@ -153,13 +172,97 @@
   "learning_progress": {
     "user_patterns": {
       "most_used_ide": "cursor",
-      "favorite_features": ["mcp_management", "docker_deploy"],
-      "common_workflows": ["project_setup", "mcp_config"]
+      "favorite_features": [
+        "mcp_management",
+        "docker_deploy"
+      ],
+      "common_workflows": [
+        "project_setup",
+        "mcp_config"
+      ]
     },
     "optimization_suggestions": [
       "Consider enabling auto-backup for important configurations",
       "Set up automated MCP synchronization between IDEs",
       "Configure voice commands for faster workflow"
     ]
-  }
-} 
+  },
+  "prompt_memories": [
+    {
+      "id": "mem_1",
+      "timestamp": "2025-07-02T13:40:02.699059",
+      "prompt": "me de uma lista dos melhores MCPs voltados para \nVocê: me de uma lista dos melhores MCPs voltados para arquitetura e software, segurança de dados e interfacee bibloiotecas graficas e ui design( figma, 21dev, vite , google ui material)",
+      "response": "Entendo que você está buscando uma lista de **cursos, certificações ou programas acadêmicos** (possivelmente \"MCPs\" como sigla de \"Master's in Computer Science\" ou \"Certificações em Tecnologia\") focados em **arquitetura de software, segurança de dados, UI/UX design** e **ferramentas como Figma, Vite, Google Material UI**, entre outras. Vou organizar a resposta por áreas, com recomendações de cursos, certificações e plataformas que abordam esses temas, incluindo os ferramentais mencionados.\n\n---\n\n### **1. Arquitetura de Software e Sistemas**  \n**Objetivo:** Desenvolver habilidades em design de sistemas, escalabilidade, arquitetura de microserviços, etc.  \n\n#### **Cursos e Programas Acadêmicos**  \n- **Master's in Computer Science (Software Architecture)**  \n  - **MIT (Massachusetts Institute of Technology)** – \"Software Architecture\" (via MIT OpenCourseWare ou programas de pós-graduação).  \n  - **Carnegie Mellon University (CMU)** – Programa de Pós-Graduação em Ciência da Computação com especialização em arquitetura de software.  \n  - **University of Washington (UW)** – \"Software Architecture\" (via Coursera).  \n  - **Stanford University** – \"Advanced Software Engineering\" (programas de pós-graduação).  \n\n- **Certificações Profissionais**  \n  - **TOGAF (The Open Group Architecture Framework)** – Certificação em arquitetura de TI e sistemas.  \n  - **AWS Certified Solutions Architect** – Foco em arquitetura de cloud e sistemas distribuídos.  \n  - **Microsoft Azure Solutions Architect** – Para arquitetura de sistemas em nuvem.  \n\n- **Cursos Online**  \n  - **Coursera** – \"Software Architecture & Design\" (Universidade da Califórnia, Berkeley).  \n  - **edX** – \"Cloud Architecture\" (MIT ou Microsoft).  \n  - **Pluralsight** – \"Enterprise Architecture\" e \"Microservices Architecture\".  \n\n---\n\n### **2. Segurança de Dados (Cybersecurity e Data Protection)**  \n**Objetivo:** Aprender sobre criptografia, proteção de dados, compliance, etc.  \n\n#### **Cursos e Certificações**  \n- **Certificados em Segurança de Dados**  \n  - **CISSP (Certified Information Systems Security Professional)** – Certificação reconhecida globalmente em segurança da informação.  \n  - **CISM (Certified Information Security Manager)** – Foco em gestão de segurança.  \n  - **CompTIA Security+** – Fundamentos de segurança cibernética.  \n\n- **Programas Acadêmicos**  \n  - **University of Maryland (UMD)** – \"Cybersecurity\" (via online ou presencial).  \n  - **Carnegie Mellon University (CMU)** – \"Information Security\" (mestrado).  \n  - **University of London** – \"Cyber Security\" (via Coursera).  \n\n- **Cursos Online**  \n  - **Udemy** – \"Certified Ethical Hacker (CEH)\" ou \"Cybersecurity Fundamentals\".  \n  - **Coursera** – \"Cybersecurity Specialization\" (University of Michigan).  \n  - **Google Cloud Training** – \"Google Cloud Security\" (para segurança em nuvem).  \n\n---\n\n### **3. UI/UX Design e Ferramentas Gráficas (Figma, Material UI, Vite)**  \n**Objetivo:** Desenvolver habilidades em design de interfaces, prototipagem e desenvolvimento front-end.  \n\n#### **Cursos e Certificações de UI/UX**  \n- **Google UX Design Certificate** (Coursera)  \n  - Inclui estudos de caso, prototipagem com **Figma** e princípios de design.  \n  - Acesso a **Google Material UI** como parte da prática.  \n\n- **Udemy** – \"Figma for Beginners\" ou \"UI/UX Design Masterclass\"  \n  - Foco em **Figma** e metodologias de design centrado no usuário.  \n\n- **FreeCodeCamp** – \"Responsive Web Design\" com **Vite** e **React** (inclui componentes do **Material UI**).  \n  - Ensina a desenvolver interfaces responsivas e modernas.  \n\n- **Pluralsight** – \"UX Design Fundamentals\" e \"React with Material UI\".  \n  - Combina teoria de UX com práticas em ferramentas como **Vite** e **Material UI**.  \n\n#### **Ferramentas Específicas**  \n- **Figma**  \n  - **Curso oficial do Figma** (https://www.figma.com/learn/).  \n  - **Udemy** – \"Figma for UI/UX Design\" (muitos cursos práticos).  \n\n- **Vite**  \n  - **Vite Academy** (https://vitejs.dev/guide/): Documentação oficial e tutoriais.  \n  - **Udemy** – \"Vite: Build Apps Faster\" (para desenvolvedores front-end).  \n\n- **Google Material UI**  \n  - **React Material UI Course** (Udemy ou YouTube).  \n  - **Material UI Docs** (https://",
+      "agent_type": "chat",
+      "model_id": "qwen/qwen3-30b-a3b:free",
+      "context_used": [],
+      "tags": []
+    },
+    {
+      "id": "mem_2",
+      "timestamp": "2025-07-02T13:40:17.973708",
+      "prompt": "me de uma lista dos melhores MCPs voltados para \nVocê: me de uma lista dos melhores MCPs voltados para arquitetura e software, segurança de dados e interfacee bibloiotecas graficas e ui design( figma, 21dev, vite , google ui material)",
+      "response": "Segue aqui uma lista de alguns dos melhores Microcontroladores (MCPs) e/ou frameworks, bibliotecas e ferramentas voltadas para arquitetura de software, segurança de dados, interfaces gráficas e UI design, considerando as tecnologias que você mencionou (Figma, Vite, Google UI Material):",
+      "agent_type": "chat",
+      "model_id": "meta-llama/llama-4-maverick:free",
+      "context_used": [],
+      "tags": []
+    },
+    {
+      "id": "mem_3",
+      "timestamp": "2025-07-02T13:41:18.439028",
+      "prompt": "me de uma lista dos melhores MCPs voltados para \nVocê: me de uma lista dos melhores MCPs voltados para arquitetura e software, segurança de dados e interfacee bibloiotecas graficas e ui design( figma, 21dev, vite , google ui material)",
+      "response": " \nChatGPT: Aqui estão algumas opções de MCPs (Micro Certificações Profissionais) voltados para arquitetura e software, segurança de dados, interfaces e bibliotecas gráficas, e UI design:\n\n1. Arquitetura e Software:\n   - Certified Software Architect (CSA)\n   - Certified Enterprise Architect (CEA)\n   - Certified Solution Architect (CSA)\n   - TOGAF 9 Certification\n\n2. Segurança de Dados:\n   - Certified Information Systems Security Professional (CISSP)\n   - Certified Information Security Manager (CISM)\n   - Certified Ethical Hacker (CEH)\n   - CompTIA Security+\n\n3. Interfaces e Bibliotecas Gráficas:\n   - React Developer Certification\n   - Angular Certification\n   - Vue.js Developer Certification\n   - Material-UI Certification\n\n4. UI Design:\n   - Figma Certified Designer\n   - Adobe XD Certification\n   - Google Material Design Certification\n\nLembre-se de verificar os requisitos de cada MCP, como cursos, exames e experiência prévia, antes de se inscrever. Além disso, é sempre bom se manter atualizado com as últimas tendências e tecnologias do mercado, participando de cursos, workshops e conferências relacionados ao desenvolvimento de software e UI design.",
+      "agent_type": "chat",
+      "model_id": "deepseek/deepseek-v3-base:free",
+      "context_used": [],
+      "tags": []
+    },
+    {
+      "id": "mem_4",
+      "timestamp": "2025-07-02T13:42:45.408101",
+      "prompt": "me de uma lista dos melhores MCPs voltados para \nVocê: me de uma lista dos melhores MCPs voltados para arquitetura e software, segurança de dados e interfacee bibloiotecas graficas e ui design( figma, 21dev, vite , google ui material)",
+      "response": "Claro! Abaixo, você encontrará uma lista de Micro-Certificados Profissionais (MCPs) voltados para arquitetura de software, segurança de dados e design de interfaces gráficas (incluindo ferramentas como Figma, 21dev, Vite e Google UI Material).\n\n### Arquitetura de Software\n\n1. **Microsoft Certified: Azure Solutions Architect Expert**\n   - Cobertura: Design e implementação de soluções de nuvem na Azure.\n   - Link: [Microsoft Learning](https://docs.microsoft.com/en-us/learn/certifications/azure-solutions-architect)\n\n2. **AWS Certified Solutions Architect – Associate/Professional**\n   - Cobertura: Design e implementação de sistemas escaláveis e seguros na AWS.\n   - Link: [AWS Certification](https://aws.amazon.com/certification/certified-solutions-architect-associate/)\n\n3. **Google Cloud Professional Solutions Architect**\n   - Cobertura: Design e implementação de soluções escaláveis e seguras na Google Cloud.\n   - Link: [Google Cloud Certification](https://cloud.google.com/certification/solutions-architect)\n\n4. **Oracle Certified Professional, Java SE 11 Developer**\n   - Cobertura: Desenvolvimento de aplicações Java, incluindo padrões de arquitetura.\n   - Link: [Oracle Certification](https://education.oracle.com/oracle-certified-professional-java-se-11-developer/pexam_1Z0-819)\n\n### Segurança de Dados\n\n1. **Certified Information Systems Security Professional (CISSP)**\n   - Cobertura: Segurança de sistemas de informação, gestão de riscos, compliance.\n   - Link: [ISC²](https://www.isc2.org/Certifications/CISSP)\n\n2. **Certified Information Security Manager (CISM)**\n   - Cobertura: Gestão de segurança da informação, desenvolvimento e implementação de políticas de segurança.\n   - Link: [ISACA](https://www.isaca.org/certifications/cism-certified-information-security-manager)\n\n3. **CompTIA Security+**\n   - Cobertura: Fundamentos de segurança da informação, incluindo ameaças, vulnerabilidades e controles.\n   - Link: [CompTIA](https://www.comptia.org/certifications/security)\n\n4. **Certified Ethical Hacker (CEH)**\n   - Cobertura: Hacking ético, testes de penetração, análise de vulnerabilidades.\n   - Link: [EC-Council](https://www.eccouncil.org/programs/certified-ethical-hacker-ceh/)\n\n### Design de Interfaces Gráficas (UI/UX)\n\n1. **Figma Certification**\n   - Cobertura: Design de interfaces gráficas usando Figma.\n   - Link: [Figma](https://www.figma.com/certification/)\n\n2. **Google UX Design Professional Certificate**\n   - Cobertura: Design de experiência do usuário, incluindo pesquisa, prototipagem e teste.\n   - Link: [Google Career Certificates](https://grow.google/certificates/ux-design/)\n\n3. **Certified Scrum Product Owner (CSPO)**\n   - Cobertura: Gestão de produtos e UX/UI em projetos ágeis.\n   - Link: [Scrum Alliance](https://www.scrumalliance.org/certifications/product-owners/certified-scrum-product-owner)\n\n4. **Adobe Certified Expert (ACE) in Adobe XD**\n   - Cobertura: Design de experiência do usuário usando Adobe XD.\n   - Link: [Adobe Certification](https://www.adobe.com/acrobat/enterprise/certification.html)\n\n### Frameworks e Ferramentas de Desenvolvimento\n\n1. **React.js Developer Certification**\n   - Cobertura: Desenvolvimento de aplicações web com React.js.\n   - Link: [React Training](https://reactjs.org/docs/getting-started.html)\n\n2. **Vite Certification**\n   - Cobertura: Desenvolvimento de aplicações web com o Vite, um construtor de build rápido.\n   - Link: [Vite](https://vitejs.dev/guide/)\n\n3. **Google Material Design Certification**\n   - Cobertura: Design de interfaces gráficas seguindo os princípios do Material Design.\n   - Link: [Google Material Design](https://material.io/)\n\n4. **21dev Certification**\n   - Cobertura: Desenvolvimento de software e práticas ágeis.\n   - Link: [21dev](https://21dev.io/)\n\nEsses MCPs são excelentes para aprimorar suas habilidades em arquitetura de software, segurança de dados e design de interfaces gráficas. Cada um deles oferece conteúdo específico e prático que pode ajudar você a se destacar em sua carreira.",
+      "agent_type": "chat",
+      "model_id": "qwen/qwen-2.5-72b-instruct:free",
+      "context_used": [],
+      "tags": []
+    },
+    {
+      "id": "mem_5",
+      "timestamp": "2025-07-02T16:05:33.954836",
+      "prompt": "QUAL É A CAPITAL DA COLOMBIA ?",
+      "response": "A capital da Colômbia é **Bogotá**.\n\nBogotá é a maior cidade da Colômbia e também a capital do país. É conhecida por sua altitude elevada (situada nos Andes), paisagens impressionantes e rica história.\n\nSe precisar de mais informações sobre a Colômbia ou qualquer outro assunto, estou à disposição!",
+      "agent_type": "chat",
+      "model_id": "deepseek/deepseek-r1-0528-qwen3-8b:free",
+      "context_used": [],
+      "tags": []
+    },
+    {
+      "id": "mem_6",
+      "timestamp": "2025-07-02T20:45:44.166445",
+      "prompt": "o palmeiras tem mundial",
+      "response": "Sim, o **Palmeiras** tem um título de **Copa do Mundo de Clubes da FIFA**. A conquista ocorreu em **2020**, quando o clube brasileiro venceu o **Al Ahly** do Egito por **2 a 1** na final, realizado em **Doha, no Catar**, com transmissão do jogo acontecendo no estádio do **Al Rayyan**. \n\n### Contexto:\n- **Qualificação**: O Palmeiras se classificou para a competição ao vencer a **Copa Libertadores da América em 2019** (na decisão contra o Santos).\n- **Caminho para a conquista**: Naquela edição, o clube eliminou outras equipes da **Libertadores** (como Flamengo e River Plate) e o campeão europeu **Bayern de Munique** (do Reino Unido, que representava a Europa devido à substituição do campeão UEFA Champions League, que foi o Bayern na época).\n- **Curiosidade**: O Palmeiras é o **único clube brasileiro** a conquistar o troféu da Copa do Mundo de Clubes da FIFA até então.\n\nSe quiser detalhes sobre jogos ou contexto da campanha, posso complementar! 🏆",
+      "agent_type": "chat",
+      "model_id": "qwen/qwen3-32b:free",
+      "context_used": [],
+      "tags": []
+    },
+    {
+      "id": "mem_7",
+      "timestamp": "2025-07-02T20:47:35.483670",
+      "prompt": "palmeiras ter mundial",
+      "response": "A expressão **\"Palmeiras tem mundial\"** está relacionada à possibilidade do **clube de futebol Sociedade Esportiva Palmeiras** (de São Paulo, Brasil) participar ou ganhar uma **Copa do Mundo de Clubes da FIFA** (atualmente chamada de **Copa dos Clubes Campeões da FIFA**). Vamos entender o contexto:\n\n---\n\n### 1. **Histórico do Palmeiras no cenário internacional**\nO Palmeiras já participou da Copa do Mundo de Clubes em:\n- **2020**: Chegou às **semifinais** após vencer a **Copa Libertadores da América** (título conquistado naquele ano contra o Santos). Na decisão do 3º lugar, foi derrotado pelo Al Ahly (Egito) por 1 a 0.  \n- **2023**: Participou do torneio ao ser campeão da **Recopa Sul-Americana** (vencida contra o River Plate, da Argentina). Neste ano, não avançou além das **quartas de final**.\n\n**Importante**: Para disputar o torneio, o clube precisa vencer competições continentais (como a Copa Libertadores, Recopa ou, recentemente, a Conmebol Sul-Americana).\n\n---\n\n### 2. **Como o Palmeiras pode \"ter\" um mundial?**\n- **Condição**: O clube precisa vencer a **Copa Libertadores da América** (maior competição sul-americana de clubes).\n- **Participação**: Após a conquista, ele representa o Brasil no torneio mundial, que reúne campeões de cada continente.\n- **Estrutura**: O torneio é realizado anualmente (normalmente em dezembro) e tem formato eliminatório (32 clubes, incluindo o campeão da Copa do Mundo de Clubes do ano anterior).\n\n---\n\n### 3. **Últimas chances?**\n- **2024**: O Palmeiras **não está classificado** para a Copa do Mundo de Clubes, pois não venceu nenhuma competição qualificadora em 2023/2024.\n- **2025**: Para participar, o clube precisará vencer a **Copa Libertadores 2024** (que começa em abril de 2024) ou a **Sul-Americana 2024** (que garante vaga no torneio mundial em 2025).\n\n---\n\n### 4. **Atual contexto e desafios**\n- O Palmeiras é um dos clubes mais tradicionais do Brasil, com **6 títulos da Copa do Brasil** e **1 da Libertadores (2020)**. No entanto, **não tem um título na Copa do Mundo de Clubes**.\n- A equipe está entre as mais fortes do Brasil, com um plantel competitivo, mas os confrontos internacionais exigem adaptação a estilos de jogo diferentes e fatores como desgaste físico (viajando longas distâncias).\n\n---\n\n### 5. **Torneio 2025: Quem participa?**\nA lista de participantes depende das competições continentais:\n- **Campeão da UEFA Champions League** (Europa)\n- **Campeão da AFC Champions League** (Ásia)\n- **Campeão da CAF Champions League** (África)\n- **Campeão da OFC Champions League** (Oceania)\n- **Campeão da CCL (Libertadores)** e **vencedor da Copa Sul-Americana** (América do Sul)\n- **Campeão da CONCACAF Champions League** (América do Norte, Caribe, Central)\n- **Campeão da antiga edição (defensor do título)**\n\nO Brasil terá **duas vagas**, sendo que **uma** já está garantida para o **campeão da Libertadores 2024**, e a **segunda** dependerá da classificação na **Copa Sul-Americana**.\n\n---\n\n### 6. **Futuro**\nSe o Palmeiras conquistar a **Copa Libertadores 2024** (ou a Sul-Americana), ele disputará a Copa do Mundo de Clubes em **2025**, que será sediada pela **Arábia Saudita** (como parte de uma nova parceria da FIFA com ligas do Oriente Médio). A equipe terá a oportunidade de competir contra os melhores clubes do mundo.\n\n---\n\n### Resumo\n- **2020**: Palmeiras chegou às semifinais da Copa do Mundo de Clubes.\n- **2023**: Participou do torneio, mas não avançou.\n- **2025**: Chance única se vencer a Libertadores 2024.\n- **Desafio**: Competir com equipes das melhores ligas do mundo (ex.: Real Madrid, Al-Hilal, Bayern de Munique).\n\nSe estiver buscando atualizações específicas, posso ajudar a checar notícias recentes sobre o clube ou a Copa do Mundo de Clubes! 🏆",
+      "agent_type": "chat",
+      "model_id": "qwen/qwen3-32b:free",
+      "context_used": [],
+      "tags": []
+    }
+  ],
+  "mudancas_recentes": [
+    {
+      "data": "2025-07-02",
+      "evento": "Implementação completa do sistema de abas: Principal, Voz, MCPs e RAG. Interface gráfica totalmente reestruturada com configuração de TTS/STT, listagem de MCPs e base de conhecimento RAG com documentações N8N, Docker, GitHub, Digital Ocean, Cloudflare e Oracle Cloud."
+    }
+  ]
+}

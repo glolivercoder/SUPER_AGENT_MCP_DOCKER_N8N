@@ -42,14 +42,18 @@ class VoiceModule:
         
         # Configurações padrão
         self.voice_config = {
-            "tts_language": "en",
-            "tts_model": "v3_en",
-            "speaker": "en_0",
+            "tts_language": "es",
+            "tts_model": "v3_es",
+            "speaker": "es_0",
             "sample_rate": 48000,
             "pitch": 1.0,
             "speed": 1.0,
             "volume": 1.0,
-            "device": "cpu"
+            "device": "cpu",
+            "language": "pt-BR",
+            "energy_threshold": 4000,
+            "dynamic_energy_threshold": True,
+            "input_device_index": None
         }
         
         self.memories = {}
@@ -129,76 +133,109 @@ class VoiceModule:
             self.logger.error(f"Erro ao salvar memórias: {e}")
 
     def _init_tts(self):
-        """Inicializa o Silero TTS"""
+        """Inicializa o pyttsx3 TTS e filtra apenas vozes em português brasileiro"""
         try:
-            self.tts_model = SileroTTS(
-                language=self.voice_config["tts_language"],
-                model_id=self.voice_config["tts_model"],
-                device=self.voice_config["device"]
-            )
-            
-            # Obter speakers disponíveis
-            self.available_speakers = self.tts_model.get_available_speakers()
-            
-            # Definir speaker padrão se não estiver definido
-            if not self.current_speaker and self.available_speakers:
-                # Tentar encontrar uma voz em português
-                pt_speakers = [s for s in self.available_speakers if s.startswith("pt_")]
-                if pt_speakers:
-                    self.current_speaker = pt_speakers[0]
-                else:
-                    self.current_speaker = self.available_speakers[0]
-                self.voice_config["speaker"] = self.current_speaker
-            
-            self.logger.info(f"Silero TTS inicializado - Modelo: {self.voice_config['tts_model']}")
-            self.logger.info(f"Speakers disponíveis: {len(self.available_speakers)}")
-            
+            import pyttsx3
+            self.tts_engine = pyttsx3.init()
+            voices = self.tts_engine.getProperty('voices')
+            self.available_speakers = []
+            for i, voice in enumerate(voices):
+                # Filtrar apenas vozes em português brasileiro
+                if ('portuguese' in voice.name.lower() or 'pt-br' in voice.id.lower() or 'brazil' in voice.name.lower()):
+                    voice_info = {
+                        'id': voice.id,
+                        'name': voice.name,
+                        'index': i,
+                        'language': voice.languages[0] if voice.languages else 'unknown'
+                    }
+                    self.available_speakers.append(voice_info)
+            if self.available_speakers:
+                self.current_speaker = self.available_speakers[0]
+                self.tts_engine.setProperty('voice', self.current_speaker['id'])
+                self.logger.info(f"Voz portuguesa selecionada: {self.current_speaker['name']}")
+            else:
+                self.logger.error("Nenhuma voz em português brasileiro encontrada no sistema!")
+                self.tts_engine = None
+            self.tts_engine.setProperty('rate', int(self.voice_config.get('speed', 1.0) * 200))
+            self.tts_engine.setProperty('volume', self.voice_config.get('volume', 1.0))
+            self.logger.info(f"pyttsx3 TTS inicializado com {len(self.available_speakers)} vozes em português brasileiro")
         except Exception as e:
-            self.logger.error(f"Erro ao inicializar Silero TTS: {e}")
-            self.tts_model = None
+            self.logger.error(f"Erro ao inicializar pyttsx3 TTS: {e}")
+            self.tts_engine = None
 
     def _init_stt(self):
-        """Inicializa o STT com fallback para SpeechRecognition"""
-        try:
-            # Primeiro tentar Vosk (offline)
-            model_paths = ["vosk-model-small-pt-0.3", "vosk-model-small-pt-br-0.3", "vosk-model-small-en-us-0.15"]
-            
-            for model_path in model_paths:
-                if os.path.exists(model_path):
-                    self.stt_model = vosk.Model(model_path)
-                    self.logger.info(f"Vosk STT inicializado com modelo: {model_path}")
-                    self.stt_type = "vosk"
-                    break
-            
-            # Se Vosk não estiver disponível, usar SpeechRecognition como fallback
-            if not hasattr(self, 'stt_model') or not self.stt_model:
-                try:
-                    import speech_recognition as sr
-                    self.stt_recognizer = sr.Recognizer()
-                    self.stt_type = "speech_recognition"
-                    self.logger.info("SpeechRecognition STT inicializado como fallback")
-                except ImportError:
-                    self.logger.warning("SpeechRecognition não disponível")
-                    self.stt_type = None
+        """Inicializa o STT conforme engine selecionado."""
+        engine = self.voice_config.get('stt_engine', 'speech_recognition')
+        self.logger.info(f"Tentando inicializar STT com engine: {engine}")
+        
+        self.stt_type = None
+        self.stt_model = None
+        self.stt_recognizer = None
+        
+        if engine == 'vosk':
+            try:
+                import vosk
+                import sounddevice as sd
+                import queue
+                model_path = 'vosk-model-small-pt-0.3.bak'  # ajuste se necessário
                 
+                if not os.path.exists(model_path):
+                    self.logger.error(f"Modelo Vosk não encontrado em: {model_path}")
+                    raise FileNotFoundError(f"Modelo Vosk não encontrado: {model_path}")
+                
+                self.stt_model = vosk.Model(model_path)
+                self.stt_type = 'vosk'
+                self.logger.info('Vosk STT inicializado com sucesso')
+                return
+            except Exception as e:
+                self.logger.error(f'Erro ao inicializar Vosk STT: {e}')
+                self.logger.info('Tentando fallback para SpeechRecognition...')
+        
+        # Fallback para SpeechRecognition
+        try:
+            import speech_recognition as sr
+            self.logger.info("Inicializando SpeechRecognition STT...")
+            
+            self.stt_recognizer = sr.Recognizer()
+            self.stt_recognizer.energy_threshold = self.voice_config.get("energy_threshold", 4000)
+            self.stt_recognizer.dynamic_energy_threshold = self.voice_config.get("dynamic_energy_threshold", True)
+            
+            # Testar se há microfones disponíveis
+            try:
+                mic_list = sr.Microphone.list_microphone_names()
+                if not mic_list:
+                    self.logger.error("Nenhum microfone detectado pelo SpeechRecognition")
+                    raise Exception("Nenhum microfone disponível")
+                self.logger.info(f"Microfones detectados: {len(mic_list)}")
+            except Exception as mic_error:
+                self.logger.error(f"Erro ao detectar microfones: {mic_error}")
+                raise mic_error
+            
+            self.stt_type = "speech_recognition"
+            self.logger.info("SpeechRecognition STT inicializado com sucesso para português brasileiro")
         except Exception as e:
-            self.logger.error(f"Erro ao inicializar STT: {e}")
-            self.stt_model = None
+            self.logger.error(f"Erro ao inicializar SpeechRecognition STT: {e}")
             self.stt_type = None
+            self.logger.error("STT não pôde ser inicializado - nenhum engine disponível")
 
     def get_speakers(self) -> List[str]:
         """Retorna lista de speakers disponíveis"""
-        return self.available_speakers
+        return [voice['name'] for voice in self.available_speakers]
 
     def set_voice(self, speaker: str):
         """Define o speaker/voz atual"""
-        if speaker in self.available_speakers:
-            self.current_speaker = speaker
-            self.voice_config["speaker"] = speaker
-            self._save_config()
-            self.logger.info(f"Voz alterada para: {speaker}")
-        else:
-            self.logger.warning(f"Speaker não encontrado: {speaker}")
+        # Procurar por nome ou ID da voz
+        for voice in self.available_speakers:
+            if speaker in voice['name'] or speaker in voice['id']:
+                self.current_speaker = voice
+                if hasattr(self, 'tts_engine') and self.tts_engine:
+                    self.tts_engine.setProperty('voice', voice['id'])
+                self.voice_config["speaker"] = voice['name']
+                self._save_config()
+                self.logger.info(f"Voz alterada para: {voice['name']}")
+                return
+        
+        self.logger.warning(f"Speaker não encontrado: {speaker}")
 
     def set_pitch(self, pitch: float):
         """Define o tom (pitch) da voz"""
@@ -209,60 +246,28 @@ class VoiceModule:
     def set_speed(self, speed: float):
         """Define a velocidade da fala"""
         self.voice_config["speed"] = max(0.5, min(2.0, speed))
+        if hasattr(self, 'tts_engine') and self.tts_engine:
+            self.tts_engine.setProperty('rate', int(speed * 200))
         self._save_config()
         self.logger.info(f"Velocidade alterada para: {self.voice_config['speed']}")
 
     def set_volume(self, volume: float):
         """Define o volume da voz"""
         self.voice_config["volume"] = max(0.1, min(2.0, volume))
+        if hasattr(self, 'tts_engine') and self.tts_engine:
+            self.tts_engine.setProperty('volume', volume)
         self._save_config()
         self.logger.info(f"Volume alterado para: {self.voice_config['volume']}")
 
     def speak(self, text: str) -> bool:
-        """Converte texto em fala usando Silero TTS"""
-        if not self.tts_model or not text.strip():
+        """Converte texto em fala usando pyttsx3 TTS"""
+        if not hasattr(self, 'tts_engine') or not self.tts_engine or not text.strip():
             return False
         
         try:
-            # Gerar áudio temporário com Silero TTS
-            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_file.close()
-            
-            # Definir speaker se disponível
-            if self.current_speaker:
-                self.tts_model.change_speaker(self.current_speaker)
-            
-            # Gerar áudio
-            self.tts_model.tts(
-                text=text,
-                output_file=temp_file.name
-            )
-            
-            # Carregar áudio
-            audio, sample_rate = sf.read(temp_file.name)
-            
-            # Aplicar modificações de volume e speed
-            audio = self._apply_voice_effects(audio)
-            
-            # Reproduzir áudio usando abordagem mais robusta
-            try:
-                # Tentar reproduzir com configurações padrão
-                sd.play(audio, samplerate=sample_rate, blocking=True)
-            except Exception as playback_error:
-                self.logger.warning(f"Erro na reprodução direta: {playback_error}")
-                try:
-                    # Fallback: usar sistema de áudio do Windows
-                    import subprocess
-                    subprocess.run(['powershell', '-c', f'(New-Object Media.SoundPlayer "{temp_file.name}").PlaySync()'], 
-                                   check=True, capture_output=True)
-                except Exception as fallback_error:
-                    self.logger.error(f"Erro no fallback de reprodução: {fallback_error}")
-                    # Usar abordagem mais simples
-                    import winsound
-                    winsound.PlaySound(temp_file.name, winsound.SND_FILENAME)
-            
-            # Limpar arquivo temporário
-            os.unlink(temp_file.name)
+            # Falar diretamente com pyttsx3
+            self.tts_engine.say(text)
+            self.tts_engine.runAndWait()
             
             self.logger.info(f"Texto falado: {text[:50]}...")
             return True
@@ -344,10 +349,10 @@ class VoiceModule:
     def get_status(self) -> Dict[str, Any]:
         """Retorna status do módulo de voz"""
         return {
-            "tts_ready": self.tts_model is not None,
-            "stt_ready": self.stt_model is not None or hasattr(self, 'stt_recognizer'),
+            "tts_ready": hasattr(self, 'tts_engine') and self.tts_engine is not None,
+            "stt_ready": hasattr(self, 'stt_model') and self.stt_model is not None or hasattr(self, 'stt_recognizer'),
             "stt_type": getattr(self, 'stt_type', None),
-            "current_speaker": self.current_speaker,
+            "current_speaker": self.current_speaker['name'] if isinstance(self.current_speaker, dict) else self.current_speaker,
             "available_speakers": len(self.available_speakers),
             "is_listening": self.is_listening,
             "config": self.voice_config
@@ -357,34 +362,61 @@ class VoiceModule:
         """Retorna lista de speakers agrupados por idioma"""
         speakers_by_lang = {}
         
-        for speaker in self.available_speakers:
-            lang_code = speaker.split("_")[0]
+        for voice in self.available_speakers:
+            lang_code = voice.get('language', 'unknown')
             if lang_code not in speakers_by_lang:
                 speakers_by_lang[lang_code] = []
-            speakers_by_lang[lang_code].append(speaker)
+            speakers_by_lang[lang_code].append(voice['name'])
             
         return speakers_by_lang
         
     def get_speaker_gender(self, speaker: str) -> str:
         """Tenta identificar o gênero da voz pelo nome do speaker"""
-        # Convenção de nomeação do Silero: pt_0 (masculino), pt_1 (feminino)
-        try:
-            speaker_parts = speaker.split("_")
-            if len(speaker_parts) > 1:
-                index = int(speaker_parts[1])
-                return "Feminino" if index % 2 == 1 else "Masculino"
-        except:
-            pass
+        # Procurar a voz pelo nome
+        for voice in self.available_speakers:
+            if voice['name'] == speaker:
+                # Lógica simples baseada no nome da voz
+                voice_lower = voice['name'].lower()
+                
+                # Vozes femininas típicas
+                female_indicators = ['female', 'woman', 'girl', 'lady', 'maria', 'ana', 'sofia', 'zira']
+                male_indicators = ['male', 'man', 'boy', 'guy', 'joao', 'pedro', 'carlos']
+                
+                for indicator in female_indicators:
+                    if indicator in voice_lower:
+                        return "Feminino"
+                
+                for indicator in male_indicators:
+                    if indicator in voice_lower:
+                        return "Masculino"
+                
+                break
+        
         return "Desconhecido"
         
+    def get_input_devices(self) -> List[str]:
+        """Retorna lista de microfones disponíveis (nome)"""
+        try:
+            import speech_recognition as sr
+            return sr.Microphone.list_microphone_names()
+        except Exception:
+            return []
+
+    def set_input_device(self, index: int):
+        """Define o índice do microfone a ser usado pelo STT"""
+        self.input_device_index = index
+        self.voice_config["input_device_index"] = index
+        self._save_config()
+        self.logger.info(f"Microfone definido para índice {index}")
+
     def listen_once(self, timeout=5) -> Optional[str]:
         """Captura áudio uma vez e converte para texto"""
-        if not self.stt_model:
+        if not hasattr(self, 'stt_type') or not self.stt_type:
             self.logger.warning("STT não inicializado")
             return None
         
         try:
-            if self.stt_type == "vosk":
+            if self.stt_type == "vosk" and hasattr(self, 'stt_model') and self.stt_model:
                 # Usar Vosk STT
                 sample_rate = 16000
                 
@@ -407,19 +439,20 @@ class VoiceModule:
                 result = json.loads(rec.FinalResult())
                 text = result.get('text', '').strip()
                 
-            elif self.stt_type == "speech_recognition":
+            elif self.stt_type == "speech_recognition" and hasattr(self, 'stt_recognizer') and self.stt_recognizer:
                 # Usar SpeechRecognition
                 import speech_recognition as sr
                 
                 self.logger.info(f"Iniciando gravação por {timeout} segundos...")
                 
-                recognizer = self.stt_recognizer  # self.stt_recognizer é um Recognizer neste caso
-                
-                with sr.Microphone() as source:
-                    recognizer.adjust_for_ambient_noise(source, duration=1)
+                mic_kwargs = {}
+                if self.input_device_index is not None:
+                    mic_kwargs["device_index"] = self.input_device_index
+                with sr.Microphone(**mic_kwargs) as source:
+                    self.stt_recognizer.adjust_for_ambient_noise(source, duration=1)
                     try:
-                        audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=timeout)
-                        text = recognizer.recognize_google(audio, language='pt-BR')
+                        audio = self.stt_recognizer.listen(source, timeout=timeout, phrase_time_limit=timeout)
+                        text = self.stt_recognizer.recognize_google(audio, language='pt-BR')
                     except sr.WaitTimeoutError:
                         self.logger.info("Timeout na gravação")
                         return None
@@ -443,3 +476,10 @@ class VoiceModule:
         except Exception as e:
             self.logger.error(f"Erro ao reconhecer fala: {e}")
             return None
+
+    def set_stt_engine(self, engine: str):
+        """Define o engine de STT e reinicializa."""
+        self.voice_config['stt_engine'] = engine
+        self._save_config()
+        self._init_stt()
+        self.logger.info(f"STT engine definido para: {engine}")

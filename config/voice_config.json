@@ -1,12 +1,22 @@
 {
-  "enabled": true,
+  "tts_language": "en",
+  "tts_model": "v3_en",
+  "speaker": "Microsoft Maria Desktop - Portuguese(Brazil)",
+  "sample_rate": 48000,
+  "pitch": 1.0,
+  "speed": 1.0,
+  "volume": 1.0,
+  "device": "cpu",
   "language": "pt-BR",
+  "energy_threshold": 4000,
+  "dynamic_energy_threshold": true,
+  "input_device_index": -1,
+  "enabled": true,
   "voice_rate": 150,
   "voice_volume": 0.9,
   "wake_word": "assistente",
   "timeout": 5,
   "phrase_time_limit": 10,
-  "energy_threshold": 4000,
-  "dynamic_energy_threshold": true,
-  "ambient_noise_duration": 1
+  "ambient_noise_duration": 1,
+  "stt_engine": "vosk"
 }
