@@ -272,6 +272,11 @@ class SuperAgentGUI:
         ttk.Button(button_frame, text="Buscar RAG", command=self._search_rag).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Salvar Memória", command=self._save_memory).pack(side=tk.LEFT, padx=5)
         
+        # Switch para resposta por TTS
+        self.tts_response_var = tk.BooleanVar(value=False)
+        tts_switch = ttk.Checkbutton(button_frame, text="Responder por voz", variable=self.tts_response_var)
+        tts_switch.pack(side=tk.RIGHT, padx=5)
+        
         # Área de contexto RAG
         context_label = ttk.Label(right_frame, text="Contexto RAG")
         context_label.pack(anchor=tk.W, pady=(10, 5))
@@ -346,18 +351,15 @@ class SuperAgentGUI:
         while not self._stop_voice_listen:
             text = self.voice_module.listen_once(timeout=5)
             if text:
+                # Ativar resposta por voz automaticamente quando usando microfone
+                if hasattr(self, 'tts_response_var'):
+                    self.tts_response_var.set(True)
+                    
                 self.prompt_text.delete(1.0, tk.END)
                 self.prompt_text.insert(1.0, text)
                 self._send_message()
-                # Falar a resposta recebida (última do chat)
-                chat_content = self.chat_text.get(1.0, tk.END)
-                lines = chat_content.split('\n')
-                for i in range(len(lines) - 1, -1, -1):
-                    if lines[i].startswith("Agente:"):
-                        resposta = lines[i].replace("Agente:", "").strip()
-                        if resposta:
-                            self.voice_module.speak(resposta)
-                        break
+                # Não precisamos falar a resposta aqui, pois o _handle_response já vai fazer isso
+                # se o switch de TTS estiver ativado
 
     def _get_agent_info(self, agent_type: str) -> Dict[str, str]:
         """Obtém informações do agente"""
@@ -549,10 +551,21 @@ class SuperAgentGUI:
         else:
             response = result.get("response", "")
             self.chat_text.insert(tk.END, f"\nAgente: {response}\n")
+            
             # Salvar na memória
             if self.openrouter_manager:
                 self.openrouter_manager.save_memory(message, response, agent_type, model_id, self.rag_context)
+            
+            # Responder por TTS se o switch estiver ativado
+            if hasattr(self, 'tts_response_var') and self.tts_response_var.get() and self.voice_module:
+                try:
+                    self.log_text.insert(tk.END, "Reproduzindo resposta por voz...\n")
+                    self.voice_module.speak(response)
+                except Exception as e:
+                    self.log_text.insert(tk.END, f"Erro ao reproduzir resposta por voz: {e}\n")
+            
             self.log_text.insert(tk.END, f"Resposta recebida com sucesso\n")
+        
         self.chat_text.see(tk.END)
         self.log_text.see(tk.END)
     
@@ -846,55 +859,178 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         frame = ttk.Frame(self.voice_tab)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+        # Título
+        ttk.Label(frame, text="Configurações de Voz (TTS/STT)", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
+
+        # Dropdown de idioma
+        ttk.Label(frame, text="Idioma:").grid(row=1, column=0, sticky=tk.W)
+        self.language_var = tk.StringVar(value="pt")
+        self.language_combo = ttk.Combobox(frame, textvariable=self.language_var, state="readonly", width=15)
+        self.language_combo.grid(row=1, column=1, padx=5, sticky=tk.W)
+        self.language_combo.bind("<<ComboboxSelected>>", self._on_language_change)
+
+        # Dropdown de gênero
+        ttk.Label(frame, text="Gênero:").grid(row=1, column=2, sticky=tk.W, padx=(20, 0))
+        self.gender_var = tk.StringVar(value="Masculino")
+        self.gender_combo = ttk.Combobox(frame, textvariable=self.gender_var, state="readonly", width=15)
+        self.gender_combo['values'] = ["Masculino", "Feminino"]
+        self.gender_combo.grid(row=1, column=3, padx=5, sticky=tk.W)
+        self.gender_combo.bind("<<ComboboxSelected>>", self._on_gender_change)
+
         # Dropdown de vozes/gênero (Silero)
-        ttk.Label(frame, text="Selecione a voz (gênero):").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(frame, text="Voz específica:").grid(row=2, column=0, sticky=tk.W)
         self.speaker_var = tk.StringVar()
-        self.speaker_combo = ttk.Combobox(frame, textvariable=self.speaker_var, state="readonly")
-        self.speaker_combo.grid(row=0, column=1, padx=5)
+        self.speaker_combo = ttk.Combobox(frame, textvariable=self.speaker_var, state="readonly", width=40)
+        self.speaker_combo.grid(row=2, column=1, columnspan=3, padx=5, sticky=tk.W+tk.E)
         self.speaker_combo.bind("<<ComboboxSelected>>", self._on_speaker_change)
 
         # Slider de tom
-        ttk.Label(frame, text="Tom (Pitch):").grid(row=1, column=0, sticky=tk.W)
+        ttk.Label(frame, text="Tom (Pitch):").grid(row=3, column=0, sticky=tk.W)
         self.pitch_var = tk.DoubleVar(value=1.0)
         self.pitch_slider = ttk.Scale(frame, from_=0.5, to=2.0, orient=tk.HORIZONTAL, variable=self.pitch_var, command=self._on_pitch_change)
-        self.pitch_slider.grid(row=1, column=1, padx=5)
-        ttk.Label(frame, textvariable=self.pitch_var, width=5).grid(row=1, column=2)
+        self.pitch_slider.grid(row=3, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
+        ttk.Label(frame, textvariable=self.pitch_var, width=5).grid(row=3, column=3)
 
         # Slider de velocidade
-        ttk.Label(frame, text="Velocidade:").grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(frame, text="Velocidade:").grid(row=4, column=0, sticky=tk.W)
         self.speed_var = tk.DoubleVar(value=1.0)
         self.speed_slider = ttk.Scale(frame, from_=0.5, to=2.0, orient=tk.HORIZONTAL, variable=self.speed_var, command=self._on_speed_change)
-        self.speed_slider.grid(row=2, column=1, padx=5)
-        ttk.Label(frame, textvariable=self.speed_var, width=5).grid(row=2, column=2)
+        self.speed_slider.grid(row=4, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
+        ttk.Label(frame, textvariable=self.speed_var, width=5).grid(row=4, column=3)
 
         # Slider de volume
-        ttk.Label(frame, text="Volume:").grid(row=3, column=0, sticky=tk.W)
+        ttk.Label(frame, text="Volume:").grid(row=5, column=0, sticky=tk.W)
         self.volume_var = tk.DoubleVar(value=1.0)
         self.volume_slider = ttk.Scale(frame, from_=0.1, to=2.0, orient=tk.HORIZONTAL, variable=self.volume_var, command=self._on_volume_change)
-        self.volume_slider.grid(row=3, column=1, padx=5)
-        ttk.Label(frame, textvariable=self.volume_var, width=5).grid(row=3, column=2)
+        self.volume_slider.grid(row=5, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
+        ttk.Label(frame, textvariable=self.volume_var, width=5).grid(row=5, column=3)
+
+        # Separador
+        ttk.Separator(frame, orient='horizontal').grid(row=6, column=0, columnspan=4, sticky=tk.E+tk.W, pady=10)
+
+        # Área de teste
+        ttk.Label(frame, text="Área de Teste de Voz", font=("Arial", 10, "bold")).grid(row=7, column=0, columnspan=4, sticky=tk.W, pady=(0, 5))
 
         # Entrada de texto para teste
-        ttk.Label(frame, text="Texto para teste:").grid(row=4, column=0, sticky=tk.W)
-        self.voice_test_entry = ttk.Entry(frame, width=40)
-        self.voice_test_entry.grid(row=4, column=1, padx=5)
-        ttk.Button(frame, text="Testar Voz", command=self._test_voice).grid(row=4, column=2, padx=5)
+        ttk.Label(frame, text="Texto para teste:").grid(row=8, column=0, sticky=tk.W)
+        self.voice_test_entry = ttk.Entry(frame, width=50)
+        self.voice_test_entry.grid(row=8, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
+        self.voice_test_entry.insert(0, "Olá, este é um teste de voz em português do Brasil.")
+        ttk.Button(frame, text="Testar Voz", command=self._test_voice).grid(row=8, column=3, padx=5)
+
+        # Status
+        self.voice_status_var = tk.StringVar(value="Status: Carregando vozes...")
+        ttk.Label(frame, textvariable=self.voice_status_var).grid(row=9, column=0, columnspan=4, sticky=tk.W, pady=(10, 0))
 
         # Carregar opções de vozes do Silero
         self._load_silero_speakers()
 
     def _load_silero_speakers(self):
         if self.voice_module and hasattr(self.voice_module, 'get_speakers'):
-            speakers = self.voice_module.get_speakers()
-            self.speaker_combo['values'] = speakers
-            if speakers:
-                self.speaker_combo.current(0)
-                self.speaker_var.set(speakers[0])
-                self.voice_module.set_voice(speakers[0])
+            try:
+                # Obter todos os speakers
+                speakers = self.voice_module.get_speakers()
+                
+                # Obter speakers por idioma
+                speakers_by_lang = self.voice_module.get_speakers_by_language()
+                
+                # Configurar dropdown de idioma
+                languages = list(speakers_by_lang.keys())
+                language_names = {
+                    "pt": "Português",
+                    "en": "Inglês",
+                    "es": "Espanhol",
+                    "fr": "Francês",
+                    "de": "Alemão",
+                    "it": "Italiano",
+                    "ru": "Russo"
+                }
+                
+                language_display = [language_names.get(lang, lang) for lang in languages]
+                self.language_combo['values'] = language_display
+                
+                # Tentar selecionar português se disponível
+                if "pt" in languages:
+                    idx = languages.index("pt")
+                    self.language_combo.current(idx)
+                    self.language_var.set(language_display[idx])
+                    self._update_speakers_by_language("pt")
+                else:
+                    self.language_combo.current(0)
+                    self._update_speakers_by_language(languages[0])
+                
+                self.voice_status_var.set(f"Status: {len(speakers)} vozes disponíveis ({len(languages)} idiomas)")
+            except Exception as e:
+                self.voice_status_var.set(f"Erro ao carregar vozes: {e}")
+        else:
+            self.voice_status_var.set("Erro: Módulo de voz não inicializado")
+    
+    def _update_speakers_by_language(self, language_code):
+        """Atualiza lista de speakers com base no idioma selecionado"""
+        if not self.voice_module:
+            return
+            
+        try:
+            speakers_by_lang = self.voice_module.get_speakers_by_language()
+            if language_code in speakers_by_lang:
+                speakers = speakers_by_lang[language_code]
+                
+                # Formatar nomes para exibição
+                speaker_display = []
+                for speaker in speakers:
+                    gender = self.voice_module.get_speaker_gender(speaker)
+                    speaker_display.append(f"{speaker} ({gender})")
+                
+                self.speaker_combo['values'] = speaker_display
+                
+                # Filtrar por gênero selecionado
+                self._on_gender_change()
+                
+        except Exception as e:
+            self.log_text.insert(tk.END, f"Erro ao atualizar speakers: {e}\n")
+    
+    def _on_language_change(self, event=None):
+        """Quando o idioma é alterado"""
+        language_display = self.language_var.get()
+        language_map = {
+            "Português": "pt",
+            "Inglês": "en",
+            "Espanhol": "es",
+            "Francês": "fr",
+            "Alemão": "de",
+            "Italiano": "it",
+            "Russo": "ru"
+        }
+        
+        language_code = language_map.get(language_display, language_display)
+        self._update_speakers_by_language(language_code)
+    
+    def _on_gender_change(self, event=None):
+        """Quando o gênero é alterado"""
+        gender = self.gender_var.get()
+        
+        # Filtrar vozes pelo gênero selecionado
+        all_speakers = self.speaker_combo['values']
+        if gender == "Masculino":
+            filtered_speakers = [s for s in all_speakers if "Masculino" in s]
+        elif gender == "Feminino":
+            filtered_speakers = [s for s in all_speakers if "Feminino" in s]
+        else:
+            filtered_speakers = all_speakers
+            
+        if filtered_speakers:
+            self.speaker_combo['values'] = filtered_speakers
+            self.speaker_combo.current(0)
+            self._on_speaker_change()
+        else:
+            # Se não houver vozes para o gênero selecionado, mostrar todas
+            self.speaker_combo['values'] = all_speakers
 
     def _on_speaker_change(self, event=None):
-        speaker = self.speaker_var.get()
-        if self.voice_module:
+        speaker_display = self.speaker_var.get()
+        if speaker_display and self.voice_module:
+            # Extrair nome do speaker sem o gênero
+            speaker = speaker_display.split(" (")[0]
             self.voice_module.set_voice(speaker)
 
     def _on_pitch_change(self, event=None):

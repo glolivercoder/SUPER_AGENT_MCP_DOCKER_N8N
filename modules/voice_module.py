@@ -142,7 +142,12 @@ class VoiceModule:
             
             # Definir speaker padrão se não estiver definido
             if not self.current_speaker and self.available_speakers:
-                self.current_speaker = self.available_speakers[0]
+                # Tentar encontrar uma voz em português
+                pt_speakers = [s for s in self.available_speakers if s.startswith("pt_")]
+                if pt_speakers:
+                    self.current_speaker = pt_speakers[0]
+                else:
+                    self.current_speaker = self.available_speakers[0]
                 self.voice_config["speaker"] = self.current_speaker
             
             self.logger.info(f"Silero TTS inicializado - Modelo: {self.voice_config['tts_model']}")
@@ -156,14 +161,18 @@ class VoiceModule:
         """Inicializa o Vosk STT"""
         try:
             # Usar Vosk para STT (open source)
-            model_path = "vosk-model-small-en-us-0.15"  # Baixar se necessário
-            if not os.path.exists(model_path):
-                self.logger.warning("Modelo Vosk não encontrado. STT pode não funcionar.")
-                return
-                
-            self.stt_model = vosk.Model(model_path)
-            self.logger.info("Vosk STT inicializado")
+            # Primeiro tentar carregar modelo em português
+            model_paths = ["vosk-model-small-pt-0.3", "vosk-model-small-pt-br-0.3", "vosk-model-small-en-us-0.15"]
             
+            for model_path in model_paths:
+                if os.path.exists(model_path):
+                    self.stt_model = vosk.Model(model_path)
+                    self.logger.info(f"Vosk STT inicializado com modelo: {model_path}")
+                    break
+            
+            if not self.stt_model:
+                self.logger.warning("Nenhum modelo Vosk encontrado. STT pode não funcionar.")
+                
         except Exception as e:
             self.logger.error(f"Erro ao inicializar Vosk STT: {e}")
             self.stt_model = None
@@ -370,3 +379,67 @@ class VoiceModule:
             "is_listening": self.is_listening,
             "config": self.voice_config
         }
+
+    def get_speakers_by_language(self) -> Dict[str, List[str]]:
+        """Retorna lista de speakers agrupados por idioma"""
+        speakers_by_lang = {}
+        
+        for speaker in self.available_speakers:
+            lang_code = speaker.split("_")[0]
+            if lang_code not in speakers_by_lang:
+                speakers_by_lang[lang_code] = []
+            speakers_by_lang[lang_code].append(speaker)
+            
+        return speakers_by_lang
+        
+    def get_speaker_gender(self, speaker: str) -> str:
+        """Tenta identificar o gênero da voz pelo nome do speaker"""
+        # Convenção de nomeação do Silero: pt_0 (masculino), pt_1 (feminino)
+        try:
+            speaker_parts = speaker.split("_")
+            if len(speaker_parts) > 1:
+                index = int(speaker_parts[1])
+                return "Feminino" if index % 2 == 1 else "Masculino"
+        except:
+            pass
+        return "Desconhecido"
+        
+    def listen_once(self, timeout=5) -> Optional[str]:
+        """Captura áudio uma vez e converte para texto"""
+        if not self.stt_model:
+            self.logger.warning("STT não inicializado")
+            return None
+        
+        try:
+            # Configurações de gravação
+            sample_rate = 16000  # Vosk recomenda 16kHz
+            
+            self.logger.info(f"Iniciando gravação por {timeout} segundos...")
+            
+            # Gravar áudio
+            audio_data = sd.rec(
+                int(timeout * sample_rate), 
+                samplerate=sample_rate, 
+                channels=1,
+                dtype=np.int16
+            )
+            sd.wait()
+            
+            # Converter para formato Vosk
+            rec = vosk.KaldiRecognizer(self.stt_model, sample_rate)
+            rec.AcceptWaveform(audio_data.tobytes())
+            
+            # Obter resultado
+            result = json.loads(rec.FinalResult())
+            text = result.get('text', '').strip()
+            
+            if text:
+                self.logger.info(f"Texto reconhecido: {text}")
+                return text
+            else:
+                self.logger.info("Nenhum texto reconhecido")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Erro ao reconhecer fala: {e}")
+            return None
