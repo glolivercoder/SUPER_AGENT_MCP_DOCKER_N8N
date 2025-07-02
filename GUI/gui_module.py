@@ -25,8 +25,9 @@ import asyncio
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import simpledialog
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List, Dict, Optional
 from datetime import datetime
 
 logger = logging.getLogger("GUI_MODULE")
@@ -69,8 +70,11 @@ class SuperAgentGUI:
         # Criar interface
         self._create_menu()
         self._create_main_interface()
-        
         self.logger.info("Interface gráfica inicializada")
+        # Carregar modelos OpenRouter automaticamente ao iniciar
+        self._load_models()
+        # Adicionar alerta visual se não houver modelos carregados após o carregamento
+        self.root.after(3000, self._alerta_modelos_openrouter)
     
     def _create_menu(self):
         """Cria o menu principal"""
@@ -110,10 +114,36 @@ class SuperAgentGUI:
         self.root.config(menu=menu_bar)
     
     def _create_main_interface(self):
-        """Cria a interface principal"""
+        """Cria a interface principal com sistema de abas"""
+        # Criar sistema de abas
+        self.tab_control = ttk.Notebook(self.root)
+        self.tab_control.pack(expand=1, fill="both", padx=10, pady=10)
+        
+        # Aba Principal
+        self.main_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.main_tab, text="Principal")
+        self._init_main_tab()
+        
+        # Aba Voz
+        self.voice_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.voice_tab, text="Voz")
+        self._init_voice_tab()
+        
+        # Aba MCPs
+        self.mcps_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.mcps_tab, text="MCPs")
+        self._init_mcps_tab()
+        
+        # Aba RAG
+        self.rag_tab = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.rag_tab, text="RAG")
+        self._init_rag_tab()
+
+    def _init_main_tab(self):
+        """Inicializa a aba principal com a interface original"""
         # Frame principal
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        main_frame = ttk.Frame(self.main_tab)
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Frame superior - Controles
         self._create_control_panel(main_frame)
@@ -123,7 +153,7 @@ class SuperAgentGUI:
         
         # Frame inferior - Status e Logs
         self._create_status_panel(main_frame)
-    
+
     def _create_control_panel(self, parent):
         """Cria painel de controles superior"""
         control_frame = ttk.LabelFrame(parent, text="Controles do Agente")
@@ -181,11 +211,21 @@ class SuperAgentGUI:
         
         ttk.Label(model_frame, text="Modelo OpenRouter:").pack(side=tk.LEFT, padx=5)
         
-        self.model_combo = ttk.Combobox(model_frame, textvariable=self.selected_model, width=40)
+        self.model_combo = ttk.Combobox(model_frame, state="readonly", textvariable=self.selected_model)
         self.model_combo.pack(side=tk.LEFT, padx=5)
+        self.model_combo.bind("<<ComboboxSelected>>", self._on_model_selected)
         
-        ttk.Button(model_frame, text="Carregar Modelos", command=self._load_models).pack(side=tk.LEFT, padx=5)
-        ttk.Button(model_frame, text="Filtrar Gratuitos", command=self._filter_free_models).pack(side=tk.LEFT, padx=5)
+        # Dropdown de empresa
+        ttk.Label(model_frame, text="Empresa:").pack(side=tk.LEFT, padx=5)
+        self.company_var = tk.StringVar()
+        self.company_combo = ttk.Combobox(model_frame, textvariable=self.company_var, state="readonly")
+        self.company_combo.pack(side=tk.LEFT, padx=5)
+        self.company_combo.bind("<<ComboboxSelected>>", self._on_company_filter)
+        
+        # Checkbox de modelos gratuitos
+        self.free_var = tk.BooleanVar()
+        self.free_checkbox = ttk.Checkbutton(model_frame, text="Modelos Gratuitos", variable=self.free_var, command=self._on_free_filter)
+        self.free_checkbox.pack(side=tk.LEFT, padx=5)
         
         # Frame para ações rápidas
         actions_frame = ttk.Frame(control_frame)
@@ -284,25 +324,41 @@ class SuperAgentGUI:
         if not self.voice_module:
             messagebox.showwarning("Aviso", "Módulo de voz não inicializado")
             return
-        
         try:
-            is_listening = self.voice_module.toggle_listening()
-            
-            if is_listening:
-                self.mic_button.config(bg="#27ae60", text="🔴")  # Verde quando ativo
-                self.voice_status_label.config(text="Voz: Ativada - Diga 'assistente'")
+            if not hasattr(self, '_voice_listen_thread') or not self._voice_listen_thread or not self._voice_listen_thread.is_alive():
+                self._voice_listen_thread = threading.Thread(target=self._voice_listen_loop, daemon=True)
+                self._voice_listen_thread.start()
+                self.mic_button.config(bg="#27ae60", text="🔴")
+                self.voice_status_label.config(text="Voz: Ativada - Diga algo...")
                 self.log_text.insert(tk.END, "Escuta de voz ativada\n")
             else:
-                self.mic_button.config(bg="#e74c3c", text="🎤")  # Vermelho quando inativo
+                self._stop_voice_listen = True
+                self.mic_button.config(bg="#e74c3c", text="🎤")
                 self.voice_status_label.config(text="Voz: Desativada")
                 self.log_text.insert(tk.END, "Escuta de voz desativada\n")
-            
             self.log_text.see(tk.END)
-            
         except Exception as e:
             self.log_text.insert(tk.END, f"Erro ao alternar voz: {e}\n")
             self.log_text.see(tk.END)
-    
+
+    def _voice_listen_loop(self):
+        self._stop_voice_listen = False
+        while not self._stop_voice_listen:
+            text = self.voice_module.listen_once(timeout=5)
+            if text:
+                self.prompt_text.delete(1.0, tk.END)
+                self.prompt_text.insert(1.0, text)
+                self._send_message()
+                # Falar a resposta recebida (última do chat)
+                chat_content = self.chat_text.get(1.0, tk.END)
+                lines = chat_content.split('\n')
+                for i in range(len(lines) - 1, -1, -1):
+                    if lines[i].startswith("Agente:"):
+                        resposta = lines[i].replace("Agente:", "").strip()
+                        if resposta:
+                            self.voice_module.speak(resposta)
+                        break
+
     def _get_agent_info(self, agent_type: str) -> Dict[str, str]:
         """Obtém informações do agente"""
         agent_info = {
@@ -332,7 +388,7 @@ class SuperAgentGUI:
     async def _load_models_async(self):
         """Carrega modelos OpenRouter de forma assíncrona"""
         if not self.openrouter_manager:
-            self.log_text.insert(tk.END, "Erro: OpenRouter Manager não inicializado\n")
+            self.root.after(0, lambda: self.log_text.insert(tk.END, "Erro: OpenRouter Manager não inicializado\n"))
             return
         
         try:
@@ -343,43 +399,73 @@ class SuperAgentGUI:
             self.root.after(0, lambda: self._update_model_combo(model_names, models))
             
         except Exception as e:
-            self.log_text.insert(tk.END, f"Erro ao carregar modelos: {e}\n")
+            self.root.after(0, lambda: self.log_text.insert(tk.END, f"Erro ao carregar modelos: {e}\n"))
+            self.root.after(0, lambda: self.log_text.see(tk.END))
     
     def _load_models(self):
         """Carrega modelos OpenRouter"""
+        if not self.openrouter_manager:
+            self.log_text.insert(tk.END, "Erro: OpenRouter Manager não inicializado\n")
+            self.log_text.see(tk.END)
+            return
+            
         self.log_text.insert(tk.END, "Carregando modelos OpenRouter...\n")
         self.log_text.see(tk.END)
         
-        # Executar de forma assíncrona
-        asyncio.run_coroutine_threadsafe(self._load_models_async(), asyncio.new_event_loop())
+        # Executar de forma assíncrona em thread separada
+        def load_models_thread():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._load_models_async())
+                loop.close()
+            except Exception as e:
+                # Usar after para atualizar GUI na thread principal
+                if hasattr(self, 'root') and self.root:
+                    self.root.after(0, lambda: self.log_text.insert(tk.END, f"Erro ao carregar modelos: {e}\n"))
+                    self.root.after(0, lambda: self.log_text.see(tk.END))
+        
+        threading.Thread(target=load_models_thread, daemon=True).start()
     
-    def _update_model_combo(self, model_names: List[str], models: List):
+    def _update_model_combo(self, model_names, models):
         """Atualiza combobox de modelos"""
+        current = self.model_combo.get()
         self.model_combo['values'] = model_names
         if model_names:
-            self.model_combo.set(model_names[0])
-        
-        # Armazenar referência aos modelos
+            # Se o modelo atual ainda está na lista, manter selecionado
+            if current in model_names:
+                self.model_combo.set(current)
+                self.selected_model.set(current)
+            else:
+                self.model_combo.set(model_names[0])
+                self.selected_model.set(model_names[0])
         self.available_models = models
-        
+        # Atualizar empresas disponíveis
+        companies = sorted(set(m.company for m in models))
+        self.company_combo['values'] = companies
+        if companies:
+            self.company_combo.set(companies[0])
         self.log_text.insert(tk.END, f"Carregados {len(models)} modelos\n")
         self.log_text.see(tk.END)
     
-    def _filter_free_models(self):
-        """Filtra apenas modelos gratuitos"""
-        if not hasattr(self, 'available_models'):
-            messagebox.showwarning("Aviso", "Carregue os modelos primeiro")
-            return
-        
-        free_models = [m for m in self.available_models if m.is_free]
-        free_names = [f"{m.name} ({m.company})" for m in free_models]
-        
-        self.model_combo['values'] = free_names
-        if free_names:
-            self.model_combo.set(free_names[0])
-        
-        self.log_text.insert(tk.END, f"Filtrados {len(free_models)} modelos gratuitos\n")
-        self.log_text.see(tk.END)
+    def _on_company_filter(self, event=None):
+        # Filtrar modelos por empresa
+        company = self.company_var.get()
+        models = getattr(self, 'available_models', [])
+        if company:
+            filtered = [m for m in models if m.company == company]
+        else:
+            filtered = models
+        self._update_model_combo([f"{m.name} ({m.company})" for m in filtered], filtered)
+
+    def _on_free_filter(self):
+        # Filtrar modelos gratuitos
+        models = getattr(self, 'available_models', [])
+        if self.free_var.get():
+            filtered = [m for m in models if getattr(m, 'is_free', False)]
+        else:
+            filtered = models
+        self._update_model_combo([f"{m.name} ({m.company})" for m in filtered], filtered)
     
     async def _send_message_async(self, message: str, agent_type: str, model_id: str):
         """Envia mensagem de forma assíncrona"""
@@ -454,23 +540,19 @@ class SuperAgentGUI:
         
         threading.Thread(target=send_async, daemon=True).start()
     
-    def _handle_response(self, result: Dict, message: str, agent_type: str, model_id: str):
+    def _handle_response(self, result, message, agent_type, model_id):
         """Processa resposta do agente"""
         self.status_label.config(text="Status: Pronto")
-        
         if "error" in result:
             self.chat_text.insert(tk.END, f"\nErro: {result['error']}\n")
             self.log_text.insert(tk.END, f"Erro na resposta: {result['error']}\n")
         else:
             response = result.get("response", "")
             self.chat_text.insert(tk.END, f"\nAgente: {response}\n")
-            
             # Salvar na memória
             if self.openrouter_manager:
                 self.openrouter_manager.save_memory(message, response, agent_type, model_id, self.rag_context)
-            
             self.log_text.insert(tk.END, f"Resposta recebida com sucesso\n")
-        
         self.chat_text.see(tk.END)
         self.log_text.see(tk.END)
     
@@ -608,16 +690,27 @@ class SuperAgentGUI:
                 self.log_text.insert(tk.END, f"Erro ao carregar documentos: {e}\n")
     
     def _detect_mcps(self):
-        """Detecta MCPs instalados"""
+        """Detecta MCPs instalados e mostra resultado"""
         if not self.mcp_manager:
             messagebox.showwarning("Aviso", "MCP Manager não inicializado")
             return
-        
+            
         try:
             mcps = self.mcp_manager.detect_installed_mcps()
-            self.log_text.insert(tk.END, f"Detectados {len(mcps)} MCPs\n")
+            if not mcps:
+                messagebox.showinfo("MCPs", "Nenhum MCP detectado nas IDEs instaladas")
+                return
+                
+            # Mudar para a aba de MCPs
+            self.tab_control.select(self.mcps_tab)
+            
+            # Atualizar lista
+            self._update_mcps_list()
+            
         except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao detectar MCPs: {e}")
             self.log_text.insert(tk.END, f"Erro ao detectar MCPs: {e}\n")
+            self.log_text.see(tk.END)
     
     def _check_docker(self):
         """Verifica status do Docker"""
@@ -734,6 +827,338 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         """
         messagebox.showinfo("Documentação", docs_text)
     
+    def _alerta_modelos_openrouter(self):
+        if not hasattr(self, 'available_models') or not self.available_models:
+            messagebox.showwarning(
+                "Atenção: Modelos OpenRouter",
+                "Nenhum modelo OpenRouter foi carregado!\n\nVerifique sua conexão, a API key e tente novamente."
+            )
+        elif hasattr(self, 'available_models') and self.available_models and hasattr(self, 'model_combo'):
+            # Se carregou, mas nenhum modelo gratuito
+            gratuitos = [m for m in self.available_models if getattr(m, 'is_free', False)]
+            if not gratuitos:
+                messagebox.showinfo(
+                    "Atenção: Modelos OpenRouter",
+                    "Modelos carregados, mas nenhum modelo gratuito disponível no momento."
+                )
+    
+    def _init_voice_tab(self):
+        frame = ttk.Frame(self.voice_tab)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Dropdown de vozes/gênero (Silero)
+        ttk.Label(frame, text="Selecione a voz (gênero):").grid(row=0, column=0, sticky=tk.W)
+        self.speaker_var = tk.StringVar()
+        self.speaker_combo = ttk.Combobox(frame, textvariable=self.speaker_var, state="readonly")
+        self.speaker_combo.grid(row=0, column=1, padx=5)
+        self.speaker_combo.bind("<<ComboboxSelected>>", self._on_speaker_change)
+
+        # Slider de tom
+        ttk.Label(frame, text="Tom (Pitch):").grid(row=1, column=0, sticky=tk.W)
+        self.pitch_var = tk.DoubleVar(value=1.0)
+        self.pitch_slider = ttk.Scale(frame, from_=0.5, to=2.0, orient=tk.HORIZONTAL, variable=self.pitch_var, command=self._on_pitch_change)
+        self.pitch_slider.grid(row=1, column=1, padx=5)
+        ttk.Label(frame, textvariable=self.pitch_var, width=5).grid(row=1, column=2)
+
+        # Slider de velocidade
+        ttk.Label(frame, text="Velocidade:").grid(row=2, column=0, sticky=tk.W)
+        self.speed_var = tk.DoubleVar(value=1.0)
+        self.speed_slider = ttk.Scale(frame, from_=0.5, to=2.0, orient=tk.HORIZONTAL, variable=self.speed_var, command=self._on_speed_change)
+        self.speed_slider.grid(row=2, column=1, padx=5)
+        ttk.Label(frame, textvariable=self.speed_var, width=5).grid(row=2, column=2)
+
+        # Slider de volume
+        ttk.Label(frame, text="Volume:").grid(row=3, column=0, sticky=tk.W)
+        self.volume_var = tk.DoubleVar(value=1.0)
+        self.volume_slider = ttk.Scale(frame, from_=0.1, to=2.0, orient=tk.HORIZONTAL, variable=self.volume_var, command=self._on_volume_change)
+        self.volume_slider.grid(row=3, column=1, padx=5)
+        ttk.Label(frame, textvariable=self.volume_var, width=5).grid(row=3, column=2)
+
+        # Entrada de texto para teste
+        ttk.Label(frame, text="Texto para teste:").grid(row=4, column=0, sticky=tk.W)
+        self.voice_test_entry = ttk.Entry(frame, width=40)
+        self.voice_test_entry.grid(row=4, column=1, padx=5)
+        ttk.Button(frame, text="Testar Voz", command=self._test_voice).grid(row=4, column=2, padx=5)
+
+        # Carregar opções de vozes do Silero
+        self._load_silero_speakers()
+
+    def _load_silero_speakers(self):
+        if self.voice_module and hasattr(self.voice_module, 'get_speakers'):
+            speakers = self.voice_module.get_speakers()
+            self.speaker_combo['values'] = speakers
+            if speakers:
+                self.speaker_combo.current(0)
+                self.speaker_var.set(speakers[0])
+                self.voice_module.set_voice(speakers[0])
+
+    def _on_speaker_change(self, event=None):
+        speaker = self.speaker_var.get()
+        if self.voice_module:
+            self.voice_module.set_voice(speaker)
+
+    def _on_pitch_change(self, event=None):
+        pitch = self.pitch_var.get()
+        if self.voice_module:
+            self.voice_module.set_pitch(pitch)
+
+    def _on_speed_change(self, event=None):
+        speed = self.speed_var.get()
+        if self.voice_module:
+            self.voice_module.set_speed(speed)
+
+    def _on_volume_change(self, event=None):
+        volume = self.volume_var.get()
+        if self.voice_module:
+            self.voice_module.set_volume(volume)
+
+    def _test_voice(self):
+        text = self.voice_test_entry.get()
+        if self.voice_module and text:
+            self.voice_module.speak(text)
+
+    def _init_mcps_tab(self):
+        frame = ttk.Frame(self.mcps_tab)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Título
+        ttk.Label(frame, text="MCPs Ativos e Detectados nas IDEs:", font=("Arial", 12, "bold")).pack(anchor=tk.W, pady=5)
+        
+        # TreeView com colunas atualizadas
+        self.mcps_tree = ttk.Treeview(frame, columns=("IDE", "Status", "MCPs"), show="headings", height=12)
+        self.mcps_tree.heading("IDE", text="IDE")
+        self.mcps_tree.heading("Status", text="Status")
+        self.mcps_tree.heading("MCPs", text="MCPs Detectados")
+        
+        # Configurar largura das colunas
+        self.mcps_tree.column("IDE", width=100)
+        self.mcps_tree.column("Status", width=120)
+        self.mcps_tree.column("MCPs", width=400)
+        
+        # Scrollbar para TreeView
+        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.mcps_tree.yview)
+        self.mcps_tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack TreeView e Scrollbar
+        self.mcps_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Frame para botões
+        button_frame = ttk.Frame(frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(button_frame, text="Atualizar Lista de MCPs", command=self._update_mcps_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Verificar Instalações", command=self._verify_ide_installations).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Mostrar Detalhes", command=self._show_mcp_details).pack(side=tk.LEFT, padx=5)
+        
+        # Carregar lista inicial
+        self._update_mcps_list()
+
+    def _update_mcps_list(self):
+        if not self.mcp_manager:
+            messagebox.showwarning("Aviso", "MCP Manager não inicializado")
+            return
+            
+        # Limpar TreeView
+        for row in self.mcps_tree.get_children():
+            self.mcps_tree.delete(row)
+        
+        try:
+            # Detectar MCPs
+            mcps = self.mcp_manager.detect_installed_mcps()
+            
+            if not mcps:
+                self.mcps_tree.insert("", tk.END, values=("Nenhuma IDE", "Não detectada", "Nenhum MCP encontrado"))
+                return
+                
+            # Adicionar cada IDE na TreeView
+            for ide, data in mcps.items():
+                status = data.get("status", "Desconhecido")
+                mcp_list = data.get("mcps", [])
+                
+                if mcp_list:
+                    # Mostrar primeiros MCPs na linha principal
+                    main_mcps = ", ".join(mcp_list[:3])
+                    if len(mcp_list) > 3:
+                        main_mcps += f" ... (+{len(mcp_list)-3} mais)"
+                        
+                    self.mcps_tree.insert("", tk.END, values=(ide, status, main_mcps))
+                else:
+                    self.mcps_tree.insert("", tk.END, values=(ide, status, "Nenhum MCP detectado"))
+        except Exception as e:
+            self.mcps_tree.insert("", tk.END, values=("Erro", "Falha na detecção", str(e)))
+            self.log_text.insert(tk.END, f"Erro ao detectar MCPs: {e}\n")
+            self.log_text.see(tk.END)
+    
+    def _verify_ide_installations(self):
+        """Verifica quais IDEs estão instaladas no sistema"""
+        try:
+            import subprocess
+            ide_status = {}
+            
+            # Verificar IDEs comuns
+            ides_to_check = {
+                "Cursor": "cursor --version",
+                "VS Code": "code --version", 
+                "Windsurf": "windsurf --version"
+            }
+            
+            for ide, command in ides_to_check.items():
+                try:
+                    result = subprocess.run(command.split(), capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        ide_status[ide] = "✅ Instalado"
+                    else:
+                        ide_status[ide] = "❌ Não encontrado"
+                except:
+                    ide_status[ide] = "❌ Não encontrado"
+            
+            # Mostrar resultado
+            status_text = "\n".join([f"{ide}: {status}" for ide, status in ide_status.items()])
+            messagebox.showinfo("Status das IDEs", f"Verificação de instalação:\n\n{status_text}")
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao verificar IDEs: {e}")
+            
+    def _show_mcp_details(self):
+        """Mostra detalhes do MCP selecionado"""
+        selection = self.mcps_tree.selection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma IDE para ver detalhes")
+            return
+            
+        item = self.mcps_tree.item(selection[0])
+        ide_name = item['values'][0]
+        
+        if not self.mcp_manager:
+            return
+            
+        mcps = self.mcp_manager.detect_installed_mcps()
+        ide_data = mcps.get(ide_name, {})
+        
+        # Criar janela de detalhes
+        detail_window = tk.Toplevel(self.root)
+        detail_window.title(f"Detalhes - {ide_name}")
+        detail_window.geometry("600x400")
+        
+        # Texto com detalhes
+        text_widget = scrolledtext.ScrolledText(detail_window, wrap=tk.WORD)
+        text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Montar texto de detalhes
+        details = f"=== DETALHES DA IDE: {ide_name} ===\n\n"
+        details += f"Status: {ide_data.get('status', 'Desconhecido')}\n\n"
+        
+        paths = ide_data.get('paths', [])
+        if paths:
+            details += "Caminhos encontrados:\n"
+            for path in paths:
+                details += f"  • {path}\n"
+            details += "\n"
+        
+        mcps_list = ide_data.get('mcps', [])
+        if mcps_list:
+            details += f"MCPs detectados ({len(mcps_list)}):\n"
+            for mcp in mcps_list:
+                details += f"  • {mcp}\n"
+        else:
+            details += "Nenhum MCP específico detectado.\n"
+            
+        text_widget.insert(tk.END, details)
+
+    def _init_rag_tab(self):
+        """Inicializa a aba RAG com documentações"""
+        frame = ttk.Frame(self.rag_tab)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Título
+        ttk.Label(frame, text="Sistema RAG - Base de Conhecimento", font=("Arial", 14, "bold")).pack(anchor=tk.W, pady=5)
+        
+        # Frame para documentações
+        docs_frame = ttk.LabelFrame(frame, text="Documentações Disponíveis")
+        docs_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Lista de documentações
+        self.rag_docs_list = tk.Listbox(docs_frame, selectmode=tk.SINGLE)
+        self.rag_docs_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Scrollbar para a lista
+        docs_scrollbar = ttk.Scrollbar(docs_frame, orient=tk.VERTICAL, command=self.rag_docs_list.yview)
+        docs_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.rag_docs_list.config(yscrollcommand=docs_scrollbar.set)
+        
+        # Frame para botões
+        buttons_frame = ttk.Frame(frame)
+        buttons_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(buttons_frame, text="Carregar Documentação", command=self._load_rag_doc).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Adicionar URL", command=self._add_rag_url).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Buscar na Base", command=self._search_rag_base).pack(side=tk.LEFT, padx=5)
+        
+        # Área de visualização do documento
+        view_frame = ttk.LabelFrame(frame, text="Visualização do Documento")
+        view_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.rag_view_text = scrolledtext.ScrolledText(view_frame, wrap=tk.WORD)
+        self.rag_view_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Carregar documentações padrão
+        self._load_default_rag_docs()
+
+    def _load_default_rag_docs(self):
+        """Carrega as documentações padrão na lista RAG"""
+        default_docs = [
+            "N8N Documentation",
+            "Docker Documentation", 
+            "Docker Compose Documentation",
+            "GitHub Commands Documentation",
+            "Digital Ocean Documentation",
+            "Cloudflare Documentation",
+            "Oracle Cloud Documentation"
+        ]
+        
+        for doc in default_docs:
+            self.rag_docs_list.insert(tk.END, doc)
+
+    def _load_rag_doc(self):
+        """Carrega documento selecionado na visualização"""
+        selection = self.rag_docs_list.curselection()
+        if not selection:
+            messagebox.showwarning("Aviso", "Selecione uma documentação")
+            return
+        
+        doc_name = self.rag_docs_list.get(selection[0])
+        # Aqui você implementaria a lógica para carregar o documento específico
+        self.rag_view_text.delete(1.0, tk.END)
+        self.rag_view_text.insert(1.0, f"Carregando documentação: {doc_name}\n\nEsta funcionalidade será implementada para carregar o conteúdo real da documentação.")
+
+    def _add_rag_url(self):
+        """Adiciona nova URL ao sistema RAG"""
+        url = simpledialog.askstring("Adicionar URL", "Digite a URL da documentação:")
+        if url:
+            self.rag_docs_list.insert(tk.END, f"URL: {url}")
+            if self.rag_system:
+                try:
+                    self.rag_system.add_url_content(url)
+                    messagebox.showinfo("Sucesso", f"URL adicionada: {url}")
+                except Exception as e:
+                    messagebox.showerror("Erro", f"Erro ao adicionar URL: {e}")
+
+    def _search_rag_base(self):
+        """Busca na base de conhecimento RAG"""
+        query = simpledialog.askstring("Buscar na Base", "Digite sua consulta:")
+        if query and self.rag_system:
+            try:
+                results = self.rag_system.search_knowledge(query)
+                self.rag_view_text.delete(1.0, tk.END)
+                self.rag_view_text.insert(1.0, f"Resultados para: {query}\n\n{results}")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro na busca: {e}")
+
+    def _on_model_selected(self, event=None):
+        # Sincronizar o valor selecionado
+        self.selected_model.set(self.model_combo.get())
+
     def run(self):
         """Executa a interface gráfica"""
         self.root.mainloop()

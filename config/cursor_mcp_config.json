@@ -1,6 +1,6 @@
 {
   "name": "cursor",
-  "path": "C:\\Users\\AppData\\Roaming\\Cursor\\mcps",
+  "path": "C:\\Users\\gloli\\AppData\\Roaming\\Cursor\\mcps",
   "enabled": true,
   "mcps": [
     {
@@ -8,7 +8,7 @@
       "version": "1.0.0",
       "enabled": true,
       "config": {
-        "memory_path": "C:\\Users\\AppData\\Roaming\\Cursor\\mcps\\supermemory\\memories",
+        "memory_path": "C:\\Users\\gloli\\AppData\\Roaming\\Cursor\\mcps\\supermemory\\memories",
         "max_memories": 100,
         "auto_save": true
       }

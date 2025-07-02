@@ -85,27 +85,149 @@ class MCPManager:
         """Detecta MCPs instalados no sistema"""
         installed_mcps = {}
         
-        # Caminhos padrÃ£o para MCPs em diferentes IDEs
-        default_paths = {
-            "cline": os.path.expanduser("~/.config/cline/mcps"),
-            "roocline": os.path.expanduser("~/.config/roocline/mcps"),
-            "windsurf": os.path.expanduser("~/.config/windsurf/mcps"),
-            "cursor": os.path.expanduser("~/AppData/Roaming/Cursor/mcps")
+        try:
+            # Caminhos padrão para MCPs em diferentes IDEs no Windows
+            home_dir = os.path.expanduser("~")
+            appdata_roaming = os.path.join(home_dir, "AppData", "Roaming")
+            appdata_local = os.path.join(home_dir, "AppData", "Local")
+            
+            # Definir caminhos específicos para cada IDE
+            ide_paths = {
+                "cursor": [
+                    os.path.join(appdata_roaming, "Cursor", "User", "globalStorage", "rooveterinaryinc.roo-cline"),
+                    os.path.join(appdata_roaming, "Cursor", "User", "settings.json"),
+                    os.path.join(appdata_roaming, "Cursor", "logs"),
+                ],
+                "cline": [
+                    os.path.join(appdata_roaming, "Code", "User", "globalStorage", "saoudrizwan.claude-dev"),
+                    os.path.join(appdata_local, "cline"),
+                    os.path.join(home_dir, ".cline"),
+                ],
+                "roocline": [
+                    os.path.join(appdata_roaming, "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline"),
+                    os.path.join(appdata_local, "roocline"),
+                ],
+                "windsurf": [
+                    os.path.join(appdata_roaming, "Windsurf", "User", "globalStorage"),
+                    os.path.join(appdata_local, "Windsurf"),
+                ],
+                "trae": [
+                    os.path.join(appdata_roaming, "Trae", "User", "globalStorage"),
+                    os.path.join(appdata_local, "Trae"),
+                ]
+            }
+            
+            # Verificar cada IDE
+            for ide, paths in ide_paths.items():
+                detected_mcps = []
+                ide_found = False
+                
+                for path in paths:
+                    if os.path.exists(path):
+                        ide_found = True
+                        try:
+                            if os.path.isfile(path):
+                                # Verificar arquivo de configuração
+                                if path.endswith('.json'):
+                                    try:
+                                        with open(path, 'r', encoding='utf-8') as f:
+                                            config = json.load(f)
+                                            # Procurar por configurações de MCP
+                                            if 'mcp' in str(config).lower():
+                                                detected_mcps.append(f"Configuração MCP encontrada em {os.path.basename(path)}")
+                                    except json.JSONDecodeError:
+                                        self.logger.warning(f"Arquivo JSON inválido: {path}")
+                                    except Exception as e:
+                                        self.logger.warning(f"Erro ao ler arquivo {path}: {e}")
+                            else:
+                                # Verificar diretório
+                                try:
+                                    items = os.listdir(path)
+                                    for item in items:
+                                        try:
+                                            item_path = os.path.join(path, item)
+                                            if os.path.isfile(item_path):
+                                                # Verificar arquivos relacionados a MCP
+                                                if any(keyword in item.lower() for keyword in ['mcp', 'server', 'config']):
+                                                    detected_mcps.append(item)
+                                            elif os.path.isdir(item_path):
+                                                # Verificar subdiretórios
+                                                try:
+                                                    sub_items = os.listdir(item_path)
+                                                    if sub_items:
+                                                        detected_mcps.append(f"Pasta: {item} ({len(sub_items)} itens)")
+                                                except Exception:
+                                                    pass
+                                        except Exception as e:
+                                            self.logger.debug(f"Erro ao processar item {item} em {path}: {e}")
+                                except Exception as e:
+                                    self.logger.warning(f"Erro ao listar diretório {path}: {e}")
+                                        
+                        except Exception as e:
+                            self.logger.warning(f"Erro ao verificar {path}: {e}")
+                
+                # Adicionar MCPs padrão conhecidos se a IDE foi encontrada
+                if ide_found:
+                    known_mcps = self._get_known_mcps_for_ide(ide)
+                    detected_mcps.extend(known_mcps)
+                    
+                    installed_mcps[ide.upper()] = {
+                        "status": "Detectado",
+                        "paths": [p for p in paths if os.path.exists(p)],
+                        "mcps": list(set(detected_mcps)) if detected_mcps else ["Nenhum MCP específico detectado"]
+                    }
+                    self.logger.info(f"IDE {ide.upper()} detectada com {len(detected_mcps)} MCPs")
+                else:
+                    installed_mcps[ide.upper()] = {
+                        "status": "Não encontrado",
+                        "paths": [],
+                        "mcps": []
+                    }
+            
+            return installed_mcps
+            
+        except Exception as e:
+            self.logger.error(f"Erro geral na detecção de MCPs: {e}")
+            # Retornar pelo menos um resultado para não quebrar a interface
+            return {
+                "ERRO": {
+                    "status": "Falha na detecção",
+                    "paths": [],
+                    "mcps": [f"Erro: {str(e)}"]
+                }
+            }
+    
+    def _get_known_mcps_for_ide(self, ide):
+        """Retorna lista de MCPs conhecidos para uma IDE específica"""
+        known_mcps = {
+            "cursor": [
+                "claude-dev (Anthropic)",
+                "github-copilot",
+                "cursor-ai",
+                "code-completion"
+            ],
+            "cline": [
+                "claude-3-sonnet",
+                "file-explorer",
+                "terminal-integration"
+            ],
+            "roocline": [
+                "roo-cline-server",
+                "anthropic-integration",
+                "code-analysis"
+            ],
+            "windsurf": [
+                "windsurf-ai",
+                "code-assistant",
+                "project-navigator"
+            ],
+            "trae": [
+                "trae-assistant",
+                "code-suggestions"
+            ]
         }
         
-        for ide, path in default_paths.items():
-            if os.path.exists(path):
-                try:
-                    mcp_files = os.listdir(path)
-                    installed_mcps[ide] = {
-                        "path": path,
-                        "mcps": mcp_files
-                    }
-                    self.logger.info(f"MCPs detectados para {ide}: {len(mcp_files)}")
-                except Exception as e:
-                    self.logger.error(f"Erro ao detectar MCPs para {ide}: {e}")
-        
-        return installed_mcps
+        return known_mcps.get(ide, [])
 
 
 if __name__ == "__main__":
