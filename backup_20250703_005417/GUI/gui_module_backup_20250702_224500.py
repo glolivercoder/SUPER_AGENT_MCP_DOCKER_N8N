@@ -102,7 +102,7 @@ class SuperAgentGUI:
         else:
             self.log_text.insert(tk.END, "OpenRouter Manager não injetado ainda\n")
             self.log_text.see(tk.END)
-    
+
     def _create_menu(self):
         """Cria o menu principal"""
         menu_bar = tk.Menu(self.root)
@@ -421,17 +421,18 @@ class SuperAgentGUI:
         return agent_info.get(agent_type, agent_info["chat"])
     
     async def _load_models_async(self):
-        """Carrega modelos OpenRouter de forma assíncrona (compatível com método síncrono)"""
+        """Carrega modelos OpenRouter de forma assíncrona"""
         if not self.openrouter_manager:
             self.root.after(0, lambda: self.log_text.insert(tk.END, "Erro: OpenRouter Manager não inicializado\n"))
             return
+        
         try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            models = await loop.run_in_executor(None, self.openrouter_manager.get_models)
+            models = await self.openrouter_manager.get_models()
             model_names = [f"{m.name} ({m.company})" for m in models]
+            
             # Atualizar combobox na thread principal
             self.root.after(0, lambda: self._update_model_combo(model_names, models))
+            
         except Exception as e:
             self.root.after(0, lambda: self.log_text.insert(tk.END, f"Erro ao carregar modelos: {e}\n"))
             self.root.after(0, lambda: self.log_text.see(tk.END))
@@ -958,13 +959,20 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         ttk.Label(frame, text="Texto de Teste:").grid(row=6, column=0, sticky=tk.W)
         self.voice_test_entry = ttk.Entry(frame, width=40)
         self.voice_test_entry.grid(row=6, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
-        
-        # Botão de teste TTS - Inicialmente ativo
+        # Checar se o TTS está pronto
+        tts_ready = False
+        if self.voice_module:
+            try:
+                status = self.voice_module.get_status()
+                tts_ready = status.get('tts_ready', False)
+            except Exception:
+                tts_ready = False
         self.tts_test_button = ttk.Button(frame, text="Testar TTS", command=self._test_voice)
         self.tts_test_button.grid(row=6, column=3, padx=5)
-        
-        # Verificar status do TTS após um delay para permitir inicialização completa
-        self.root.after(1000, self._update_tts_status)
+        if not tts_ready:
+            self.tts_test_button.config(state="disabled")
+            self.tts_status_label = ttk.Label(frame, text="TTS não disponível ou não inicializado", foreground="red")
+            self.tts_status_label.grid(row=8, column=1, columnspan=2, sticky=tk.W)
 
         # Botão para abrir configurações de áudio do sistema
         ttk.Button(frame, text="Abrir Config. de Áudio", command=self._open_system_audio).grid(row=11, column=0, columnspan=4, pady=(10,0))
@@ -1030,12 +1038,6 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
                     self.mic_combo.current(saved_idx)
                 else:
                     self.mic_combo.current(0)
-            else:
-                # Se não há dispositivos, não tentar definir current
-                pass
-        else:
-            # Se não há voice_module, não tentar definir current
-            pass
 
     def _update_speakers_by_language(self, language_code: str = "pt"):
         """Atualiza o combo de vozes de acordo com o idioma escolhido."""
@@ -1170,39 +1172,6 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         except Exception as e:
             self.stt_status_label.config(text="Status STT: Erro ao verificar", foreground="red")
             self.logger.error(f"Erro ao atualizar status STT: {e}")
-
-    def _update_tts_status(self):
-        """Atualiza o status do TTS na interface"""
-        if not hasattr(self, 'tts_status_label'):
-            # Criar label de status se não existir
-            if hasattr(self, 'voice_tab'):
-                frame = self.voice_tab.winfo_children()[0]
-                self.tts_status_label = ttk.Label(frame, text="Status TTS: Verificando...", foreground="orange")
-                self.tts_status_label.grid(row=8, column=1, columnspan=2, sticky=tk.W)
-        
-        if not self.voice_module:
-            if hasattr(self, 'tts_status_label'):
-                self.tts_status_label.config(text="Status TTS: Módulo não inicializado", foreground="red")
-            return
-            
-        try:
-            status = self.voice_module.get_status()
-            tts_ready = status.get('tts_ready', False)
-            
-            if tts_ready:
-                if hasattr(self, 'tts_status_label'):
-                    self.tts_status_label.config(text="Status TTS: Pronto", foreground="green")
-                if hasattr(self, 'tts_test_button'):
-                    self.tts_test_button.config(state="normal")
-            else:
-                if hasattr(self, 'tts_status_label'):
-                    self.tts_status_label.config(text="Status TTS: Não inicializado", foreground="red")
-                if hasattr(self, 'tts_test_button'):
-                    self.tts_test_button.config(state="disabled")
-        except Exception as e:
-            if hasattr(self, 'tts_status_label'):
-                self.tts_status_label.config(text="Status TTS: Erro ao verificar", foreground="red")
-            self.logger.error(f"Erro ao atualizar status TTS: {e}")
 
     def _stop_voice(self):
         """Para completamente a reprodução de voz"""

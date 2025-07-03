@@ -29,7 +29,6 @@ from tkinter import simpledialog
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
-import time
 
 logger = logging.getLogger("GUI_MODULE")
 
@@ -72,36 +71,10 @@ class SuperAgentGUI:
         self._create_menu()
         self._create_main_interface()
         self.logger.info("Interface gráfica inicializada")
-        # Não carregar modelos automaticamente - aguardar injeção de dependências
-        # self._load_models()
+        # Carregar modelos OpenRouter automaticamente ao iniciar
+        self._load_models()
         # Adicionar alerta visual se não houver modelos carregados após o carregamento
-        self.root.after(5000, self._alerta_modelos_openrouter)
-        
-        # Inicializar escuta de voz automaticamente após um delay
-        self.root.after(2000, self._start_voice_listening_auto)
-    
-    def _start_voice_listening_auto(self):
-        """Inicia automaticamente a escuta de voz se o módulo estiver disponível"""
-        if self.voice_module and not hasattr(self, '_voice_listen_thread'):
-            try:
-                self._voice_listen_thread = threading.Thread(target=self._voice_listen_loop, daemon=True)
-                self._voice_listen_thread.start()
-                self.logger.info("Escuta de voz iniciada automaticamente")
-                if hasattr(self, 'log_text'):
-                    self.log_text.insert(tk.END, "Escuta de voz iniciada automaticamente\n")
-                    self.log_text.see(tk.END)
-            except Exception as e:
-                self.logger.error(f"Erro ao iniciar escuta de voz automaticamente: {e}")
-    
-    def load_models_after_injection(self):
-        """Carrega modelos após a injeção de dependências"""
-        if hasattr(self, 'openrouter_manager') and self.openrouter_manager:
-            self.log_text.insert(tk.END, "Carregando modelos OpenRouter após injeção...\n")
-            self.log_text.see(tk.END)
-            self._load_models()
-        else:
-            self.log_text.insert(tk.END, "OpenRouter Manager não injetado ainda\n")
-            self.log_text.see(tk.END)
+        self.root.after(3000, self._alerta_modelos_openrouter)
     
     def _create_menu(self):
         """Cria o menu principal"""
@@ -190,21 +163,21 @@ class SuperAgentGUI:
         voice_frame = ttk.Frame(control_frame)
         voice_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        # Botão de microfone (favicon) - Iniciar como ativo por padrão
+        # Botão de microfone (favicon)
         self.mic_button = tk.Button(
             voice_frame, 
-            text="🔴", 
+            text="🎤", 
             font=("Arial", 16),
             width=3,
             command=self._toggle_voice_listening,
             relief=tk.RAISED,
-            bg="#27ae60",
+            bg="#e74c3c",
             fg="white"
         )
         self.mic_button.pack(side=tk.LEFT, padx=5)
         
-        # Status de voz - Iniciar como ativo por padrão
-        self.voice_status_label = ttk.Label(voice_frame, text="Voz: Ativada - Diga algo...")
+        # Status de voz
+        self.voice_status_label = ttk.Label(voice_frame, text="Voz: Desativada")
         self.voice_status_label.pack(side=tk.LEFT, padx=10)
         
         # Wake word info
@@ -376,23 +349,17 @@ class SuperAgentGUI:
     def _voice_listen_loop(self):
         self._stop_voice_listen = False
         while not self._stop_voice_listen:
-            text = self.voice_module.listen_once(timeout=15)  # Aumentar timeout para 15 segundos
+            text = self.voice_module.listen_once(timeout=5)
             if text:
                 # Ativar resposta por voz automaticamente quando usando microfone
                 if hasattr(self, 'tts_response_var'):
                     self.tts_response_var.set(True)
                     
-                # Apenas inserir o texto no prompt, não enviar automaticamente
                 self.prompt_text.delete(1.0, tk.END)
                 self.prompt_text.insert(1.0, text)
-                
-                # Mostrar mensagem de confirmação
-                self.log_text.insert(tk.END, f"Texto reconhecido: {text}\n")
-                self.log_text.insert(tk.END, "Pressione 'Enviar' para enviar a mensagem ou continue falando...\n")
-                self.log_text.see(tk.END)
-                
-                # Aguardar um pouco antes de continuar escutando
-                time.sleep(1)
+                self._send_message()
+                # Não precisamos falar a resposta aqui, pois o _handle_response já vai fazer isso
+                # se o switch de TTS estiver ativado
 
     def _get_agent_info(self, agent_type: str) -> Dict[str, str]:
         """Obtém informações do agente"""
@@ -421,17 +388,18 @@ class SuperAgentGUI:
         return agent_info.get(agent_type, agent_info["chat"])
     
     async def _load_models_async(self):
-        """Carrega modelos OpenRouter de forma assíncrona (compatível com método síncrono)"""
+        """Carrega modelos OpenRouter de forma assíncrona"""
         if not self.openrouter_manager:
             self.root.after(0, lambda: self.log_text.insert(tk.END, "Erro: OpenRouter Manager não inicializado\n"))
             return
+        
         try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            models = await loop.run_in_executor(None, self.openrouter_manager.get_models)
+            models = await self.openrouter_manager.get_models()
             model_names = [f"{m.name} ({m.company})" for m in models]
+            
             # Atualizar combobox na thread principal
             self.root.after(0, lambda: self._update_model_combo(model_names, models))
+            
         except Exception as e:
             self.root.after(0, lambda: self.log_text.insert(tk.END, f"Erro ao carregar modelos: {e}\n"))
             self.root.after(0, lambda: self.log_text.see(tk.END))
@@ -475,48 +443,31 @@ class SuperAgentGUI:
                 self.selected_model.set(model_names[0])
         self.available_models = models
         # Atualizar empresas disponíveis
-        companies = ["Todas"] + sorted(set(m.company for m in models))
+        companies = sorted(set(m.company for m in models))
         self.company_combo['values'] = companies
         if companies:
-            self.company_combo.set("Todas")
+            self.company_combo.set(companies[0])
         self.log_text.insert(tk.END, f"Carregados {len(models)} modelos\n")
         self.log_text.see(tk.END)
     
     def _on_company_filter(self, event=None):
-        """Filtrar modelos por empresa"""
+        # Filtrar modelos por empresa
         company = self.company_var.get()
         models = getattr(self, 'available_models', [])
-        
-        if company and company != "Todas":
+        if company:
             filtered = [m for m in models if m.company == company]
         else:
             filtered = models
-            
-        # Aplicar filtro de gratuitos se estiver ativo
-        if self.free_var.get():
-            filtered = [m for m in filtered if getattr(m, 'is_free', False)]
-            
         self._update_model_combo([f"{m.name} ({m.company})" for m in filtered], filtered)
-        self.log_text.insert(tk.END, f"Filtrados {len(filtered)} modelos por empresa: {company}\n")
-        self.log_text.see(tk.END)
 
     def _on_free_filter(self):
-        """Filtrar modelos gratuitos"""
+        # Filtrar modelos gratuitos
         models = getattr(self, 'available_models', [])
-        
         if self.free_var.get():
             filtered = [m for m in models if getattr(m, 'is_free', False)]
         else:
             filtered = models
-            
-        # Aplicar filtro de empresa se estiver ativo
-        company = self.company_var.get()
-        if company and company != "Todas":
-            filtered = [m for m in filtered if m.company == company]
-            
         self._update_model_combo([f"{m.name} ({m.company})" for m in filtered], filtered)
-        self.log_text.insert(tk.END, f"Filtrados {len(filtered)} modelos (gratuitos: {self.free_var.get()})\n")
-        self.log_text.see(tk.END)
     
     async def _send_message_async(self, message: str, agent_type: str, model_id: str):
         """Envia mensagem de forma assíncrona"""
@@ -958,34 +909,10 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         ttk.Label(frame, text="Texto de Teste:").grid(row=6, column=0, sticky=tk.W)
         self.voice_test_entry = ttk.Entry(frame, width=40)
         self.voice_test_entry.grid(row=6, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
-        
-        # Botão de teste TTS - Inicialmente ativo
-        self.tts_test_button = ttk.Button(frame, text="Testar TTS", command=self._test_voice)
-        self.tts_test_button.grid(row=6, column=3, padx=5)
-        
-        # Verificar status do TTS após um delay para permitir inicialização completa
-        self.root.after(1000, self._update_tts_status)
+        ttk.Button(frame, text="Testar TTS", command=self._test_voice).grid(row=6, column=3, padx=5)
 
         # Botão para abrir configurações de áudio do sistema
         ttk.Button(frame, text="Abrir Config. de Áudio", command=self._open_system_audio).grid(row=11, column=0, columnspan=4, pady=(10,0))
-
-        # Frame para controles de voz (stop/pause)
-        voice_control_frame = ttk.LabelFrame(frame, text="Controles de Voz")
-        voice_control_frame.grid(row=12, column=0, columnspan=4, pady=(10,0), sticky=tk.W+tk.E)
-        
-        # Botões de controle - Iniciar habilitados por padrão
-        self.stop_voice_button = ttk.Button(voice_control_frame, text="⏹️ Stop", command=self._stop_voice, state="normal")
-        self.stop_voice_button.pack(side=tk.LEFT, padx=5, pady=5)
-        
-        self.pause_voice_button = ttk.Button(voice_control_frame, text="⏸️ Pause", command=self._pause_voice, state="normal")
-        self.pause_voice_button.pack(side=tk.LEFT, padx=5, pady=5)
-        
-        self.resume_voice_button = ttk.Button(voice_control_frame, text="▶️ Resume", command=self._resume_voice, state="disabled")
-        self.resume_voice_button.pack(side=tk.LEFT, padx=5, pady=5)
-        
-        # Status de voz - Iniciar como "Pronto" em vez de "Parado"
-        self.voice_control_status = ttk.Label(voice_control_frame, text="Status: Pronto")
-        self.voice_control_status.pack(side=tk.LEFT, padx=10, pady=5)
 
         # Dispositivo de entrada
         ttk.Label(frame, text="Microfone:").grid(row=10, column=0, sticky=tk.W, pady=(10,0))
@@ -993,27 +920,6 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
         self.mic_combo = ttk.Combobox(frame, textvariable=self.mic_var, state="readonly", width=40)
         self.mic_combo.grid(row=10, column=1, columnspan=2, padx=5, sticky=tk.W+tk.E)
         ttk.Button(frame, text="Definir", command=self._on_mic_change).grid(row=10, column=3, padx=5, pady=(10,0))
-
-        # Dropdown de engine STT
-        ttk.Label(frame, text="Reconhecimento de Voz (STT):").grid(row=7, column=0, sticky=tk.W)
-        
-        # Proteger acesso ao voice_module
-        stt_default = 'speech_recognition'
-        if self.voice_module and hasattr(self.voice_module, 'voice_config'):
-            stt_default = self.voice_module.voice_config.get('stt_engine', 'speech_recognition')
-        
-        self.stt_engine_var = tk.StringVar(value=stt_default)
-        self.stt_engine_combo = ttk.Combobox(frame, textvariable=self.stt_engine_var, state="readonly", width=20)
-        self.stt_engine_combo['values'] = ["speech_recognition", "vosk"]
-        self.stt_engine_combo.grid(row=7, column=1, padx=5, sticky=tk.W)
-        self.stt_engine_combo.bind("<<ComboboxSelected>>", self._on_stt_engine_change)
-        
-        # Status do STT
-        self.stt_status_label = ttk.Label(frame, text="Status STT: Verificando...", foreground="orange")
-        self.stt_status_label.grid(row=7, column=2, padx=5, sticky=tk.W)
-        
-        # Atualizar status do STT após um delay
-        self.root.after(1000, self._update_stt_status)
 
         # Carregar dispositivos de áudio
         self._load_audio_devices()
@@ -1030,12 +936,6 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
                     self.mic_combo.current(saved_idx)
                 else:
                     self.mic_combo.current(0)
-            else:
-                # Se não há dispositivos, não tentar definir current
-                pass
-        else:
-            # Se não há voice_module, não tentar definir current
-            pass
 
     def _update_speakers_by_language(self, language_code: str = "pt"):
         """Atualiza o combo de vozes de acordo com o idioma escolhido."""
@@ -1143,136 +1043,6 @@ Use "Buscar RAG" para incluir contexto da base de conhecimento.
                 subprocess.run(["pavucontrol"], check=False)
         except Exception as e:
             messagebox.showerror("Erro", f"Não foi possível abrir configurações de áudio: {e}")
-
-    def _on_stt_engine_change(self, event=None):
-        engine = self.stt_engine_var.get()
-        if self.voice_module:
-            self.voice_module.set_stt_engine(engine)
-            messagebox.showinfo("STT", f"Engine de reconhecimento de voz definido para: {engine}")
-            # Atualizar status após mudança
-            self._update_stt_status()
-
-    def _update_stt_status(self):
-        """Atualiza o status do STT na interface"""
-        if not self.voice_module:
-            self.stt_status_label.config(text="Status STT: Módulo não inicializado", foreground="red")
-            return
-            
-        try:
-            status = self.voice_module.get_status()
-            stt_ready = status.get('stt_ready', False)
-            stt_type = status.get('stt_type', 'Nenhum')
-            
-            if stt_ready:
-                self.stt_status_label.config(text=f"Status STT: {stt_type} (OK)", foreground="green")
-            else:
-                self.stt_status_label.config(text=f"Status STT: {stt_type} (Erro)", foreground="red")
-        except Exception as e:
-            self.stt_status_label.config(text="Status STT: Erro ao verificar", foreground="red")
-            self.logger.error(f"Erro ao atualizar status STT: {e}")
-
-    def _update_tts_status(self):
-        """Atualiza o status do TTS na interface"""
-        if not hasattr(self, 'tts_status_label'):
-            # Criar label de status se não existir
-            if hasattr(self, 'voice_tab'):
-                frame = self.voice_tab.winfo_children()[0]
-                self.tts_status_label = ttk.Label(frame, text="Status TTS: Verificando...", foreground="orange")
-                self.tts_status_label.grid(row=8, column=1, columnspan=2, sticky=tk.W)
-        
-        if not self.voice_module:
-            if hasattr(self, 'tts_status_label'):
-                self.tts_status_label.config(text="Status TTS: Módulo não inicializado", foreground="red")
-            return
-            
-        try:
-            status = self.voice_module.get_status()
-            tts_ready = status.get('tts_ready', False)
-            
-            if tts_ready:
-                if hasattr(self, 'tts_status_label'):
-                    self.tts_status_label.config(text="Status TTS: Pronto", foreground="green")
-                if hasattr(self, 'tts_test_button'):
-                    self.tts_test_button.config(state="normal")
-            else:
-                if hasattr(self, 'tts_status_label'):
-                    self.tts_status_label.config(text="Status TTS: Não inicializado", foreground="red")
-                if hasattr(self, 'tts_test_button'):
-                    self.tts_test_button.config(state="disabled")
-        except Exception as e:
-            if hasattr(self, 'tts_status_label'):
-                self.tts_status_label.config(text="Status TTS: Erro ao verificar", foreground="red")
-            self.logger.error(f"Erro ao atualizar status TTS: {e}")
-
-    def _stop_voice(self):
-        """Para completamente a reprodução de voz"""
-        if self.voice_module:
-            try:
-                # Parar TTS se estiver falando
-                if hasattr(self.voice_module, 'tts_engine') and self.voice_module.tts_engine:
-                    self.voice_module.tts_engine.stop()
-                
-                # Parar escuta se estiver ativa
-                if hasattr(self, '_voice_listen_thread') and self._voice_listen_thread and self._voice_listen_thread.is_alive():
-                    self._stop_voice_listen = True
-                    self.mic_button.config(bg="#e74c3c", text="🎤")
-                    self.voice_status_label.config(text="Voz: Desativada")
-                
-                # Atualizar botões
-                self.stop_voice_button.config(state="disabled")
-                self.pause_voice_button.config(state="disabled")
-                self.resume_voice_button.config(state="disabled")
-                self.voice_control_status.config(text="Status: Parado")
-                
-                self.log_text.insert(tk.END, "Voz parada completamente\n")
-                self.log_text.see(tk.END)
-                
-            except Exception as e:
-                self.log_text.insert(tk.END, f"Erro ao parar voz: {e}\n")
-                self.log_text.see(tk.END)
-
-    def _pause_voice(self):
-        """Pausa a reprodução de voz"""
-        if self.voice_module:
-            try:
-                # Pausar TTS se estiver falando
-                if hasattr(self.voice_module, 'tts_engine') and self.voice_module.tts_engine:
-                    # pyttsx3 não tem pause nativo, então vamos parar
-                    self.voice_module.tts_engine.stop()
-                
-                # Atualizar botões
-                self.pause_voice_button.config(state="disabled")
-                self.resume_voice_button.config(state="normal")
-                self.voice_control_status.config(text="Status: Pausado")
-                
-                self.log_text.insert(tk.END, "Voz pausada\n")
-                self.log_text.see(tk.END)
-                
-            except Exception as e:
-                self.log_text.insert(tk.END, f"Erro ao pausar voz: {e}\n")
-                self.log_text.see(tk.END)
-
-    def _resume_voice(self):
-        """Retoma a reprodução de voz"""
-        if self.voice_module:
-            try:
-                # pyttsx3 não tem resume nativo, mas podemos reconfigurar
-                if hasattr(self.voice_module, 'tts_engine') and self.voice_module.tts_engine:
-                    # Reconfigurar propriedades
-                    self.voice_module.tts_engine.setProperty('rate', int(self.voice_module.voice_config.get('speed', 1.0) * 200))
-                    self.voice_module.tts_engine.setProperty('volume', self.voice_module.voice_config.get('volume', 1.0))
-                
-                # Atualizar botões
-                self.pause_voice_button.config(state="normal")
-                self.resume_voice_button.config(state="disabled")
-                self.voice_control_status.config(text="Status: Pronto")
-                
-                self.log_text.insert(tk.END, "Voz retomada\n")
-                self.log_text.see(tk.END)
-                
-            except Exception as e:
-                self.log_text.insert(tk.END, f"Erro ao retomar voz: {e}\n")
-                self.log_text.see(tk.END)
 
     def _init_mcps_tab(self):
         frame = ttk.Frame(self.mcps_tab)

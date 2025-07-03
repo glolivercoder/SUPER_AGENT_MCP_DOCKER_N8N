@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from collections import defaultdict
-import requests
 
 @dataclass
 class OpenRouterModel:
@@ -99,35 +98,38 @@ class OpenRouterManager:
         self.logger.info("OpenRouter Manager inicializado com rate limiting")
     
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Obtém ou cria uma sessão HTTP com connection pooling (agora sempre cria nova para debug)"""
+        """Obtém ou cria uma sessão HTTP com connection pooling"""
         now = datetime.now()
-
-        # Sempre fechar e criar nova sessão para debug de 'Connection closed'
-        if self.session:
-            self.logger.warning("Fechando sessão HTTP antiga (debug Connection closed)")
-            await self.session.close()
-            self.session = None
-
-        # Configurar connection pooling
-        connector = aiohttp.TCPConnector(
-            limit=5,  # Limite de conexões simultâneas
-            limit_per_host=3,  # Limite por host
-            ttl_dns_cache=300,  # Cache DNS
-            use_dns_cache=True,
-            keepalive_timeout=30,
-            enable_cleanup_closed=True
-        )
-
-        timeout = aiohttp.ClientTimeout(total=30, connect=10)
-
-        self.session = aiohttp.ClientSession(
-            connector=connector,
-            timeout=timeout,
-            headers=self.default_headers
-        )
-        self.session_created = now
-
-        self.logger.info("Nova sessão HTTP criada (debug Connection closed)")
+        
+        # Criar nova sessão se não existir ou expirou
+        if (self.session is None or 
+            self.session_created is None or 
+            (now - self.session_created).total_seconds() > self.session_timeout):
+            
+            if self.session:
+                await self.session.close()
+            
+            # Configurar connection pooling
+            connector = aiohttp.TCPConnector(
+                limit=5,  # Limite de conexões simultâneas
+                limit_per_host=3,  # Limite por host
+                ttl_dns_cache=300,  # Cache DNS
+                use_dns_cache=True,
+                keepalive_timeout=30,
+                enable_cleanup_closed=True
+            )
+            
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            
+            self.session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout,
+                headers=self.default_headers
+            )
+            self.session_created = now
+            
+            self.logger.debug("Nova sessão HTTP criada")
+        
         return self.session
     
     async def _check_rate_limit(self, endpoint: str) -> bool:
@@ -163,8 +165,7 @@ class OpenRouterManager:
             await asyncio.sleep(wait_time)
     
     async def _make_request_with_retry(self, method: str, url: str, **kwargs) -> aiohttp.ClientResponse:
-        """Faz requisição com retry logic e backoff exponencial (com logs detalhados)"""
-        self.logger.info(f"[DEBUG] Iniciando requisição: {method} {url}")
+        """Faz requisição com retry logic e backoff exponencial"""
         session = await self._get_session()
         
         for attempt in range(self.max_retries):
@@ -172,15 +173,12 @@ class OpenRouterManager:
                 # Verificar rate limit
                 endpoint = url.split('/')[-1]
                 await self._wait_for_rate_limit(endpoint)
-                self.logger.info(f"[DEBUG] Passou rate limit, tentativa {attempt+1}")
                 
                 # Registrar requisição
                 self.request_times[endpoint].append(datetime.now())
                 
                 # Fazer requisição
-                self.logger.info(f"[DEBUG] Enviando request aiohttp... tentativa {attempt+1}")
                 async with session.request(method, url, **kwargs) as response:
-                    self.logger.info(f"[DEBUG] Recebeu resposta status: {response.status}")
                     if response.status == 200:
                         return response
                     elif response.status == 429:  # Too Many Requests
@@ -202,7 +200,6 @@ class OpenRouterManager:
                         return response
                         
             except asyncio.TimeoutError:
-                self.logger.error(f"[DEBUG] Timeout na tentativa {attempt+1}")
                 if attempt < self.max_retries - 1:
                     delay = self.base_delay * (2 ** attempt)
                     self.logger.warning(f"Timeout. Tentativa {attempt + 1}/{self.max_retries}. Aguardando {delay}s...")
@@ -211,7 +208,6 @@ class OpenRouterManager:
                 else:
                     raise
             except Exception as e:
-                self.logger.error(f"[DEBUG] Exception na tentativa {attempt+1}: {e}")
                 if attempt < self.max_retries - 1:
                     delay = self.base_delay * (2 ** attempt)
                     self.logger.warning(f"Erro: {e}. Tentativa {attempt + 1}/{self.max_retries}. Aguardando {delay}s...")
@@ -226,55 +222,69 @@ class OpenRouterManager:
         """Verifica se a API key está configurada"""
         return bool(self.api_key and self.api_key.startswith('sk-or-'))
     
-    def get_models(self):
-        """Carrega modelos da OpenRouter usando requests (sincrono)"""
-        self.logger.info("Carregando modelos OpenRouter (via requests)...")
-        url = "https://openrouter.ai/api/v1/models"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "SUPER_AGENT_MCP_DOCKER_N8N"
-        }
+    async def get_models(self, force_refresh: bool = False) -> List[OpenRouterModel]:
+        """Obtém lista de modelos disponíveis com rate limiting"""
+        if not self.check_api_key():
+            return []
+        
+        # Verificar cache
+        if not force_refresh and self.models_cache and self.last_update:
+            time_diff = (datetime.now() - self.last_update).total_seconds()
+            if time_diff < self.cache_duration:
+                return list(self.models_cache.values())
+        
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
-            self.logger.info(f"[DEBUG] Status: {resp.status_code}")
-            if resp.status_code == 200:
-                data = resp.json()
+            self.logger.info("Carregando modelos OpenRouter...")
+            response = await self._make_request_with_retry('GET', f"{self.base_url}/models")
+            
+            if response.status == 200:
+                data = await response.json()
                 models = []
+                
                 for model_data in data.get("data", []):
                     # Extrair empresa do nome do modelo se não estiver disponível
                     company = model_data.get("company", "Unknown")
                     if company == "Unknown":
-                        parts = model_data.get("id", "").split("/")
-                        if len(parts) > 1:
-                            company = parts[0]
+                        # Tentar extrair empresa do nome do modelo
+                        name = model_data.get("name", "")
+                        if ":" in name:
+                            company = name.split(":")[0].strip()
+                        elif " " in name and any(keyword in name.lower() for keyword in ["gpt", "claude", "gemini", "llama"]):
+                            # Detectar empresas conhecidas
+                            if "gpt" in name.lower():
+                                company = "OpenAI"
+                            elif "claude" in name.lower():
+                                company = "Anthropic"
+                            elif "gemini" in name.lower():
+                                company = "Google"
+                            elif "llama" in name.lower():
+                                company = "Meta"
+                            else:
+                                company = name.split(" ")[0]
                     
-                    # Verificar se é modelo gratuito
-                    is_free = self._is_model_free(model_data)
-                    
-                    # Extrair tags
-                    tags = model_data.get("tags", [])
-                    
-                    # Criar objeto OpenRouterModel
                     model = OpenRouterModel(
-                        id=model_data.get("id", ""),
-                        name=model_data.get("name", ""),
+                        id=model_data["id"],
+                        name=model_data["name"],
                         description=model_data.get("description", ""),
                         context_length=model_data.get("context_length", 0),
                         pricing=model_data.get("pricing", {}),
                         company=company,
-                        is_free=is_free,
-                        tags=tags
+                        is_free=self._is_model_free(model_data),
+                        tags=model_data.get("tags", [])
                     )
                     models.append(model)
+                    self.models_cache[model.id] = model
                 
-                self.logger.info(f"Modelos carregados: {len(models)}")
+                self.last_update = datetime.now()
+                self.logger.info(f"Carregados {len(models)} modelos com sucesso")
                 return models
             else:
-                self.logger.error(f"Erro HTTP: {resp.status_code}")
+                error_text = await response.text()
+                self.logger.error(f"Erro ao obter modelos: {response.status} - {error_text}")
                 return []
+                
         except Exception as e:
-            self.logger.error(f"Erro ao carregar modelos via requests: {e}")
+            self.logger.error(f"Erro ao obter modelos: {e}")
             return []
     
     def _is_model_free(self, model_data: Dict) -> bool:

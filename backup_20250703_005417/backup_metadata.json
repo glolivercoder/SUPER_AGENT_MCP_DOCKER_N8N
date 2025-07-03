@@ -1,0 +1,21 @@
+{
+  "backup_timestamp": "20250703_005417",
+  "backup_date": "2025-07-03T00:54:18.797446",
+  "project_version": "0.1.0",
+  "backup_items": [
+    "modules/",
+    "GUI/",
+    "config/",
+    "data/",
+    "logs/",
+    "main.py",
+    "gui_main.py",
+    "requirements.txt",
+    "README.md",
+    "SUPER_AGENT_MCP_DOCKER_N8N.md",
+    "MEMORIES.json",
+    "CHANGELOG.md",
+    "install_voice.py"
+  ],
+  "total_size": 67986147
+}

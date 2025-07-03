@@ -483,4 +483,3 @@ class VoiceModule:
         self._save_config()
         self._init_stt()
         self.logger.info(f"STT engine definido para: {engine}")
- 

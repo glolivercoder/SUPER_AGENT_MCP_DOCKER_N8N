@@ -1,0 +1,26 @@
+{
+  "name": "cursor",
+  "path": "C:\\Users\\gloli\\AppData\\Roaming\\Cursor\\mcps",
+  "enabled": true,
+  "mcps": [
+    {
+      "name": "supermemory",
+      "version": "1.0.0",
+      "enabled": true,
+      "config": {
+        "memory_path": "C:\\Users\\gloli\\AppData\\Roaming\\Cursor\\mcps\\supermemory\\memories",
+        "max_memories": 100,
+        "auto_save": true
+      }
+    },
+    {
+      "name": "filemanager",
+      "version": "1.0.0",
+      "enabled": true,
+      "config": {
+        "allowed_extensions": [".py", ".js", ".html", ".css", ".json", ".md", ".txt"],
+        "max_file_size": 10485760
+      }
+    }
+  ]
+}

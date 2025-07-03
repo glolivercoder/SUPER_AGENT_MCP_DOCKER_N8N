@@ -164,59 +164,17 @@ class VoiceModule:
             self.tts_engine = None
 
     def _init_stt(self):
-        """Inicializa o STT conforme engine selecionado."""
-        engine = self.voice_config.get('stt_engine', 'speech_recognition')
-        self.logger.info(f"Tentando inicializar STT com engine: {engine}")
-        
-        self.stt_type = None
-        self.stt_model = None
-        self.stt_recognizer = None
-        
-        if engine == 'vosk':
-            try:
-                import vosk
-                import sounddevice as sd
-                import queue
-                model_path = 'vosk-model-small-pt-0.3.bak'  # ajuste se necessário
-                
-                if not os.path.exists(model_path):
-                    self.logger.error(f"Modelo Vosk não encontrado em: {model_path}")
-                    raise FileNotFoundError(f"Modelo Vosk não encontrado: {model_path}")
-                
-                self.stt_model = vosk.Model(model_path)
-                self.stt_type = 'vosk'
-                self.logger.info('Vosk STT inicializado com sucesso')
-                return
-            except Exception as e:
-                self.logger.error(f'Erro ao inicializar Vosk STT: {e}')
-                self.logger.info('Tentando fallback para SpeechRecognition...')
-        
-        # Fallback para SpeechRecognition
+        """Inicializa o STT com fallback para SpeechRecognition em português brasileiro"""
         try:
             import speech_recognition as sr
-            self.logger.info("Inicializando SpeechRecognition STT...")
-            
             self.stt_recognizer = sr.Recognizer()
             self.stt_recognizer.energy_threshold = self.voice_config.get("energy_threshold", 4000)
             self.stt_recognizer.dynamic_energy_threshold = self.voice_config.get("dynamic_energy_threshold", True)
-            
-            # Testar se há microfones disponíveis
-            try:
-                mic_list = sr.Microphone.list_microphone_names()
-                if not mic_list:
-                    self.logger.error("Nenhum microfone detectado pelo SpeechRecognition")
-                    raise Exception("Nenhum microfone disponível")
-                self.logger.info(f"Microfones detectados: {len(mic_list)}")
-            except Exception as mic_error:
-                self.logger.error(f"Erro ao detectar microfones: {mic_error}")
-                raise mic_error
-            
             self.stt_type = "speech_recognition"
-            self.logger.info("SpeechRecognition STT inicializado com sucesso para português brasileiro")
+            self.logger.info("SpeechRecognition STT inicializado para português brasileiro")
         except Exception as e:
             self.logger.error(f"Erro ao inicializar SpeechRecognition STT: {e}")
             self.stt_type = None
-            self.logger.error("STT não pôde ser inicializado - nenhum engine disponível")
 
     def get_speakers(self) -> List[str]:
         """Retorna lista de speakers disponíveis"""
@@ -476,11 +434,3 @@ class VoiceModule:
         except Exception as e:
             self.logger.error(f"Erro ao reconhecer fala: {e}")
             return None
-
-    def set_stt_engine(self, engine: str):
-        """Define o engine de STT e reinicializa."""
-        self.voice_config['stt_engine'] = engine
-        self._save_config()
-        self._init_stt()
-        self.logger.info(f"STT engine definido para: {engine}")
- 
