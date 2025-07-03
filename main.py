@@ -83,6 +83,73 @@ class SuperAgent:
             self.rag_system = RAGSystem()
             self.logger.info("RAG System inicializado")
             
+            # Carregar referência do Cursor Directory no RAG (se ainda não carregada)
+            cursor_url = "https://cursor.directory/"
+            try:
+                doc = self.rag_system.load_from_url(cursor_url, title="Cursor Directory", tags=["mcp", "cursor", "best-practices", "ui", "ux", "arquitetura"])
+                if doc and self.database_manager:
+                    # Verificar se já existe documento equivalente no banco
+                    # Simples: pesquisar por source_path
+                    existing = self.database_manager.search_rag_documents(cursor_url, limit=1)
+                    if not existing:
+                        self.database_manager.add_rag_document(
+                            title=doc.metadata.get("title", "Cursor Directory"),
+                            content=doc.content,
+                            source_path=cursor_url,
+                            source_type="url",
+                            tags=["cursor", "mcp", "best-practices"],
+                            metadata=doc.metadata
+                        )
+                        self.logger.info("Cursor Directory adicionado ao banco de dados RAG")
+                    else:
+                        self.logger.info("Cursor Directory já presente no banco de dados")
+            except Exception as e:
+                self.logger.warning(f"Falha ao carregar Cursor Directory no RAG: {e}")
+            
+            # Carregar repositório GitHub MCP Servers
+            github_repo = "https://github.com/modelcontextprotocol/servers"
+            try:
+                github_docs = self.rag_system.load_from_github(github_repo)
+                if github_docs and self.database_manager:
+                    added = 0
+                    for gdoc in github_docs:
+                        src = gdoc.metadata.get("source", gdoc.metadata.get("path", ""))
+                        title = gdoc.metadata.get("path", "MCP Server Doc")
+                        # Verificar duplicidade simples por source_path
+                        if not self.database_manager.search_rag_documents(src, limit=1):
+                            self.database_manager.add_rag_document(
+                                title=title,
+                                content=gdoc.content,
+                                source_path=src,
+                                source_type="github",
+                                tags=["mcp", "server", "reference"],
+                                metadata=gdoc.metadata
+                            )
+                            added += 1
+                    self.logger.info(f"MCP Servers GitHub: {added} novos documentos adicionados ao banco")
+            except Exception as e:
+                self.logger.warning(f"Falha ao carregar repositório MCP Servers: {e}")
+            
+            # Carregar site Smithery.ai
+            smithery_url = "https://smithery.ai/"
+            try:
+                sdoc = self.rag_system.load_from_url(smithery_url, title="Smithery AI", tags=["mcp", "registry", "smithery"])
+                if sdoc and self.database_manager:
+                    if not self.database_manager.search_rag_documents(smithery_url, limit=1):
+                        self.database_manager.add_rag_document(
+                            title="Smithery AI",
+                            content=sdoc.content,
+                            source_path=smithery_url,
+                            source_type="url",
+                            tags=["smithery", "mcp", "registry"],
+                            metadata=sdoc.metadata
+                        )
+                        self.logger.info("Smithery AI adicionado ao banco de dados RAG")
+                    else:
+                        self.logger.info("Smithery AI já presente no banco de dados")
+            except Exception as e:
+                self.logger.warning(f"Falha ao carregar Smithery AI no RAG: {e}")
+            
             # Inicializar Fê Agent
             self.fe_agent = FeAgent()
             self.logger.info("Fê Agent inicializado")
