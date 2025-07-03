@@ -2,28 +2,23 @@
 # -*- coding: utf-8 -*-
 
 """
-OpenRouter Manager - Gerenciador de Modelos LLM via OpenRouter (CORRIGIDO)
----------------------------------------------------------------------------
-Gerencia conexões com a API OpenRouter para acessar diversos modelos LLM
-com rate limiting, retry logic e connection pooling.
-
-Autor: [Seu Nome]
-Data: 01/07/2025
-Versão: 0.1.1 - Corrigido para evitar suspensão da API
+OpenRouter Manager - Versão Melhorada
+Gerencia comunicação com a API OpenRouter para modelos de IA
 """
 
-import os
-import json
-import logging
 import asyncio
 import aiohttp
+import requests
+import json
 import time
-from datetime import datetime, timedelta
-from pathlib import Path
+import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from collections import defaultdict
-import requests
+from pathlib import Path
+import logging
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 @dataclass
 class OpenRouterModel:
@@ -36,199 +31,69 @@ class OpenRouterModel:
     company: str
     is_free: bool
     tags: List[str]
+    available: bool = True
 
 class OpenRouterManager:
-    """Gerencia conexões com OpenRouter API com rate limiting"""
+    """Gerencia comunicação com a API OpenRouter"""
     
     def __init__(self):
-        self.api_key = os.getenv('OPENROUTER_API_KEY', '')
+        self.api_key = os.getenv('OPENROUTER_API_KEY', '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')
         self.base_url = "https://openrouter.ai/api/v1"
-        self.logger = logging.getLogger("OpenRouterManager")
-        
-        # Cache de modelos
-        self.models_cache = {}
-        self.last_update = None
-        self.cache_duration = 300  # 5 minutos
-        
-        # Rate limiting
-        self.request_times = defaultdict(list)
-        self.max_requests_per_minute = 15  # Limite conservador
-        self.max_requests_per_day = 500    # Limite conservador
-        
-        # Connection pooling
+        self.logger = logger
         self.session = None
-        self.session_created = None
-        self.session_timeout = 300  # 5 minutos
+        self.rate_limits = {}
         
-        # Retry logic
-        self.max_retries = 3
-        self.base_delay = 2.0  # segundos
-        
-        # Headers padrão conforme documentação OpenRouter
-        self.default_headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/super-agent-mcp-docker-n8n",
-            "X-Title": "SUPER_AGENT_MCP_DOCKER_N8N"
-        }
-        
-        # Tipos de agente
+        # Tipos de agentes disponíveis
         self.agent_types = {
             "chat": {
                 "name": "Chat Geral",
-                "description": "Conversa geral e assistente",
-                "system_prompt": "Você é um assistente útil e amigável."
+                "system_prompt": "Você é um assistente útil e amigável. Responda de forma clara e concisa."
             },
-            "prompt": {
-                "name": "Análise de Prompts",
-                "description": "Análise e otimização de prompts",
-                "system_prompt": "Você é um especialista em análise e otimização de prompts."
+            "code": {
+                "name": "Assistente de Código",
+                "system_prompt": "Você é um especialista em programação. Forneça código limpo, bem documentado e eficiente."
             },
-            "n8n": {
-                "name": "Especialista N8N",
-                "description": "Automação e workflows N8N",
-                "system_prompt": "Você é um especialista em automação e workflows N8N."
+            "analysis": {
+                "name": "Analista",
+                "system_prompt": "Você é um analista especializado. Forneça análises detalhadas e insights valiosos."
             },
-            "deploy": {
-                "name": "Especialista em Deploy",
-                "description": "Deploy e infraestrutura",
-                "system_prompt": "Você é um especialista em deploy e infraestrutura."
+            "creative": {
+                "name": "Criativo",
+                "system_prompt": "Você é um assistente criativo. Ajude com ideias inovadoras e soluções criativas."
             }
         }
         
-        self.logger.info("OpenRouter Manager inicializado com rate limiting")
+        # Banco de dados de memórias
+        self.memories_file = Path("MEMORIES.json")
+        self._load_memories()
     
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Obtém ou cria uma sessão HTTP com connection pooling (agora sempre cria nova para debug)"""
-        now = datetime.now()
-
-        # Sempre fechar e criar nova sessão para debug de 'Connection closed'
-        if self.session:
-            self.logger.warning("Fechando sessão HTTP antiga (debug Connection closed)")
-            await self.session.close()
-            self.session = None
-
-        # Configurar connection pooling
-        connector = aiohttp.TCPConnector(
-            limit=5,  # Limite de conexões simultâneas
-            limit_per_host=3,  # Limite por host
-            ttl_dns_cache=300,  # Cache DNS
-            use_dns_cache=True,
-            keepalive_timeout=30,
-            enable_cleanup_closed=True
-        )
-
-        timeout = aiohttp.ClientTimeout(total=30, connect=10)
-
-        self.session = aiohttp.ClientSession(
-            connector=connector,
-            timeout=timeout,
-            headers=self.default_headers
-        )
-        self.session_created = now
-
-        self.logger.info("Nova sessão HTTP criada (debug Connection closed)")
-        return self.session
-    
-    async def _check_rate_limit(self, endpoint: str) -> bool:
-        """Verifica se não excedeu o rate limit"""
-        now = datetime.now()
-        minute_ago = now - timedelta(minutes=1)
-        day_ago = now - timedelta(days=1)
-        
-        # Limpar timestamps antigos
-        self.request_times[endpoint] = [
-            t for t in self.request_times[endpoint] 
-            if t > minute_ago
-        ]
-        
-        # Verificar limite por minuto
-        if len(self.request_times[endpoint]) >= self.max_requests_per_minute:
-            return False
-        
-        # Verificar limite diário (simplificado)
-        daily_requests = sum(
-            len(times) for times in self.request_times.values()
-        )
-        if daily_requests >= self.max_requests_per_day:
-            return False
-        
-        return True
-    
-    async def _wait_for_rate_limit(self, endpoint: str):
-        """Aguarda até poder fazer nova requisição"""
-        while not await self._check_rate_limit(endpoint):
-            wait_time = 60  # Aguardar 1 minuto
-            self.logger.warning(f"Rate limit atingido para {endpoint}. Aguardando {wait_time}s...")
-            await asyncio.sleep(wait_time)
-    
-    async def _make_request_with_retry(self, method: str, url: str, **kwargs) -> aiohttp.ClientResponse:
-        """Faz requisição com retry logic e backoff exponencial (com logs detalhados)"""
-        self.logger.info(f"[DEBUG] Iniciando requisição: {method} {url}")
-        session = await self._get_session()
-        
-        for attempt in range(self.max_retries):
+    def _load_memories(self):
+        """Carrega memórias do arquivo"""
+        if self.memories_file.exists():
             try:
-                # Verificar rate limit
-                endpoint = url.split('/')[-1]
-                await self._wait_for_rate_limit(endpoint)
-                self.logger.info(f"[DEBUG] Passou rate limit, tentativa {attempt+1}")
-                
-                # Registrar requisição
-                self.request_times[endpoint].append(datetime.now())
-                
-                # Fazer requisição
-                self.logger.info(f"[DEBUG] Enviando request aiohttp... tentativa {attempt+1}")
-                async with session.request(method, url, **kwargs) as response:
-                    self.logger.info(f"[DEBUG] Recebeu resposta status: {response.status}")
-                    if response.status == 200:
-                        return response
-                    elif response.status == 429:  # Too Many Requests
-                        retry_after = int(response.headers.get('Retry-After', 60))
-                        self.logger.warning(f"Rate limit (429). Aguardando {retry_after}s...")
-                        await asyncio.sleep(retry_after)
-                        continue
-                    elif response.status == 402:  # Payment Required
-                        error_text = await response.text()
-                        self.logger.error(f"Erro 402 - Saldo insuficiente: {error_text}")
-                        raise Exception(f"Saldo insuficiente na conta OpenRouter: {error_text}")
-                    elif response.status >= 500:  # Server Error
-                        if attempt < self.max_retries - 1:
-                            delay = self.base_delay * (2 ** attempt)
-                            self.logger.warning(f"Erro {response.status}. Tentativa {attempt + 1}/{self.max_retries}. Aguardando {delay}s...")
-                            await asyncio.sleep(delay)
-                            continue
-                    else:
-                        return response
-                        
-            except asyncio.TimeoutError:
-                self.logger.error(f"[DEBUG] Timeout na tentativa {attempt+1}")
-                if attempt < self.max_retries - 1:
-                    delay = self.base_delay * (2 ** attempt)
-                    self.logger.warning(f"Timeout. Tentativa {attempt + 1}/{self.max_retries}. Aguardando {delay}s...")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    raise
+                with open(self.memories_file, 'r', encoding='utf-8') as f:
+                    self.memories = json.load(f)
             except Exception as e:
-                self.logger.error(f"[DEBUG] Exception na tentativa {attempt+1}: {e}")
-                if attempt < self.max_retries - 1:
-                    delay = self.base_delay * (2 ** attempt)
-                    self.logger.warning(f"Erro: {e}. Tentativa {attempt + 1}/{self.max_retries}. Aguardando {delay}s...")
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    raise
-        
-        raise Exception(f"Falha após {self.max_retries} tentativas")
+                self.logger.error(f"Erro ao carregar memórias: {e}")
+                self.memories = []
+        else:
+            self.memories = []
+    
+    def _save_memories(self):
+        """Salva memórias no arquivo"""
+        try:
+            with open(self.memories_file, 'w', encoding='utf-8') as f:
+                json.dump(self.memories, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar memórias: {e}")
     
     def check_api_key(self) -> bool:
         """Verifica se a API key está configurada"""
         return bool(self.api_key and self.api_key.startswith('sk-or-'))
     
     def get_models(self):
-        """Carrega modelos da OpenRouter usando requests (sincrono)"""
-        self.logger.info("Carregando modelos OpenRouter (via requests)...")
+        """Carrega apenas modelos disponíveis da OpenRouter"""
+        self.logger.info("Carregando modelos OpenRouter disponíveis...")
         url = "https://openrouter.ai/api/v1/models"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -241,8 +106,17 @@ class OpenRouterManager:
             if resp.status_code == 200:
                 data = resp.json()
                 models = []
+                total_models = len(data.get("data", []))
+                available_models = 0
+                
                 for model_data in data.get("data", []):
-                    # Extrair empresa do nome do modelo se não estiver disponível
+                    # Verificar se o modelo está disponível
+                    if not self._is_model_available(model_data):
+                        continue
+                    
+                    available_models += 1
+                    
+                    # Extrair empresa do nome do modelo
                     company = model_data.get("company", "Unknown")
                     if company == "Unknown":
                         parts = model_data.get("id", "").split("/")
@@ -264,18 +138,52 @@ class OpenRouterManager:
                         pricing=model_data.get("pricing", {}),
                         company=company,
                         is_free=is_free,
-                        tags=tags
+                        tags=tags,
+                        available=True
                     )
                     models.append(model)
                 
-                self.logger.info(f"Modelos carregados: {len(models)}")
+                self.logger.info(f"Modelos disponíveis: {available_models}/{total_models}")
                 return models
             else:
                 self.logger.error(f"Erro HTTP: {resp.status_code}")
                 return []
         except Exception as e:
-            self.logger.error(f"Erro ao carregar modelos via requests: {e}")
+            self.logger.error(f"Erro ao carregar modelos: {e}")
             return []
+    
+    def _is_model_available(self, model_data: Dict) -> bool:
+        """Verifica se o modelo está disponível para uso"""
+        # Verificar se o modelo não está desabilitado
+        if model_data.get("disabled", False):
+            return False
+        
+        # Verificar se o modelo não está offline
+        if model_data.get("offline", False):
+            return False
+        
+        # Verificar se o modelo tem endpoint configurado
+        if not model_data.get("endpoints"):
+            return False
+        
+        # Verificar se o modelo não está em manutenção
+        if model_data.get("maintenance", False):
+            return False
+        
+        # Verificar se o modelo tem preços definidos (indica que está ativo)
+        pricing = model_data.get("pricing", {})
+        if not pricing:
+            return False
+        
+        # Verificar se o modelo tem contexto definido
+        if not model_data.get("context_length"):
+            return False
+        
+        # Verificar se o modelo não está deprecated
+        if model_data.get("deprecated", False):
+            return False
+        
+        return True
     
     def _is_model_free(self, model_data: Dict) -> bool:
         """Verifica se o modelo é gratuito"""
@@ -336,7 +244,8 @@ class OpenRouterManager:
         return sorted(companies)
     
     async def chat_with_model(self, model_id: str, messages: List[Dict], 
-                            agent_type: str = "chat", context_docs: Optional[List[str]] = None) -> Dict:
+                            agent_type: str = "chat", context_docs: Optional[List[str]] = None,
+                            tts_enabled: bool = False) -> Dict:
         """Chat com modelo específico com rate limiting"""
         if not self.check_api_key():
             return {"error": "API key não configurada"}
@@ -344,6 +253,19 @@ class OpenRouterManager:
         try:
             # Preparar mensagens com contexto do agente
             system_prompt = self.agent_types.get(agent_type, {}).get("system_prompt", "")
+            
+            # Adicionar instruções para TTS se estiver habilitado
+            if tts_enabled:
+                tts_instructions = """
+                
+                IMPORTANTE - RESPOSTA PARA TTS:
+                - NÃO use caracteres especiais como *, \\, /, #, @, $, %, ^, &, |, ~, `, +, =, {, }, [, ], <, >, ", ', ;, :, ?, !
+                - Substitua esses caracteres por palavras descritivas (ex: "asterisco" em vez de *, "barra" em vez de /)
+                - Use apenas texto limpo que pode ser lido naturalmente por um sistema de síntese de voz
+                - Evite símbolos técnicos que seriam lidos literalmente pelo TTS
+                - Mantenha a resposta clara e natural para leitura em voz alta
+                """
+                system_prompt += tts_instructions
             
             if context_docs:
                 context_text = "\n\n".join(context_docs)
@@ -358,16 +280,25 @@ class OpenRouterManager:
                 "max_tokens": 2000
             }
             
-            self.logger.info(f"Enviando requisição para modelo: {model_id}")
+            self.logger.info(f"Enviando requisição para modelo: {model_id} (TTS: {'Sim' if tts_enabled else 'Não'})")
             
-            response = await self._make_request_with_retry(
-                'POST', 
-                f"{self.base_url}/chat/completions", 
-                json=payload
+            # Usar requests para evitar problemas de conexão
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "HTTP-Referer": "http://localhost",
+                "X-Title": "SUPER_AGENT_MCP_DOCKER_N8N",
+                "Content-Type": "application/json"
+            }
+            
+            resp = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
             )
             
-            if response.status == 200:
-                data = await response.json()
+            if resp.status_code == 200:
+                data = resp.json()
                 return {
                     "success": True,
                     "response": data["choices"][0]["message"]["content"],
@@ -375,179 +306,29 @@ class OpenRouterManager:
                     "model": model_id
                 }
             else:
-                error_text = await response.text()
-                self.logger.error(f"Erro na API OpenRouter: Status {response.status}, Response: {error_text}")
+                error_text = resp.text
+                self.logger.error(f"Erro na API OpenRouter: Status {resp.status_code}, Response: {error_text}")
                 return {"error": f"Erro na API: {error_text}"}
                 
         except Exception as e:
             self.logger.error(f"Erro no chat: {e}")
             return {"error": str(e)}
     
-    async def check_credits(self) -> Dict[str, Any]:
-        """Verifica créditos disponíveis na conta"""
-        if not self.check_api_key():
-            return {"error": "API key não configurada"}
-        
-        try:
-            response = await self._make_request_with_retry('GET', f"{self.base_url}/auth/key")
-            
-            if response.status == 200:
-                data = await response.json()
-                return {
-                    "success": True,
-                    "usage": data.get("data", {}).get("usage", 0),
-                    "limit": data.get("data", {}).get("limit"),
-                    "is_free_tier": data.get("data", {}).get("is_free_tier", True)
-                }
-            else:
-                error_text = await response.text()
-                return {"error": f"Erro ao verificar créditos: {error_text}"}
-                
-        except Exception as e:
-            return {"error": f"Erro ao verificar créditos: {e}"}
-    
-    async def generate_prd(self, model_id: str, project_description: str, 
-                          context_docs: Optional[List[str]] = None) -> Dict:
-        """Gera PRD completo para projeto"""
-        prompt = f"""
-        Crie um Product Requirements Document (PRD) completo e detalhado para o seguinte projeto:
-        
-        {project_description}
-        
-        O PRD deve incluir:
-        1. Visão Geral do Produto
-        2. Objetivos e Metas
-        3. Personas e Casos de Uso
-        4. Funcionalidades Principais
-        5. Requisitos Técnicos
-        6. Arquitetura do Sistema
-        7. Requisitos de Segurança
-        8. Requisitos de Performance
-        9. Estratégia de Deploy
-        10. Cronograma e Milestones
-        11. Critérios de Sucesso
-        12. Riscos e Mitigações
-        
-        Use as melhores práticas modernas de desenvolvimento de software, segurança de dados e metodologias ágeis.
-        """
-        
-        messages = [{"role": "user", "content": prompt}]
-        return await self.chat_with_model(model_id, messages, "prompt", context_docs)
-    
-    async def generate_tasks(self, model_id: str, prd_content: str, 
-                           context_docs: Optional[List[str]] = None) -> Dict:
-        """Gera arquivo de tasks baseado no PRD"""
-        prompt = f"""
-        Com base no seguinte PRD, crie um arquivo de tasks detalhado para desenvolvimento:
-        
-        {prd_content}
-        
-        Crie tasks organizadas por:
-        1. Setup do Ambiente
-        2. Backend Development
-        3. Frontend Development
-        4. Database Design
-        5. API Development
-        6. Security Implementation
-        7. Testing
-        8. Deploy
-        9. Documentation
-        
-        Cada task deve ter:
-        - ID único
-        - Título claro
-        - Descrição detalhada
-        - Critérios de aceitação
-        - Estimativa de tempo
-        - Dependências
-        - Status (TODO, IN_PROGRESS, DONE)
-        """
-        
-        messages = [{"role": "user", "content": prompt}]
-        return await self.chat_with_model(model_id, messages, "prompt", context_docs)
-    
-    async def generate_n8n_workflow(self, model_id: str, workflow_description: str,
-                                  context_docs: Optional[List[str]] = None) -> Dict:
-        """Gera workflow N8N com Docker Compose"""
-        prompt = f"""
-        Crie um workflow N8N completo para:
-        
-        {workflow_description}
-        
-        Inclua:
-        1. Workflow JSON completo
-        2. Configuração de nodes
-        3. Credenciais necessárias
-        4. Docker Compose para N8N
-        5. Instruções de deploy
-        6. Monitoramento e logs
-        
-        Use as melhores práticas de automação e integração.
-        """
-        
-        messages = [{"role": "user", "content": prompt}]
-        return await self.chat_with_model(model_id, messages, "n8n", context_docs)
-    
-    async def generate_deploy_script(self, model_id: str, project_info: str,
-                                   target_platform: str, context_docs: Optional[List[str]] = None) -> Dict:
-        """Gera script de deploy para plataforma específica"""
-        prompt = f"""
-        Crie um script de deploy completo para {target_platform}:
-        
-        {project_info}
-        
-        Inclua:
-        1. Scripts de deploy
-        2. Configurações de ambiente
-        3. Docker Compose (se aplicável)
-        4. Configurações de CI/CD
-        5. Monitoramento e logs
-        6. Backup e recovery
-        7. Documentação de deploy
-        
-        Use as melhores práticas para {target_platform}.
-        """
-        
-        messages = [{"role": "user", "content": prompt}]
-        return await self.chat_with_model(model_id, messages, "deploy", context_docs)
-    
     def save_memory(self, prompt: str, response: str, agent_type: str, 
                    model_id: str, context_used: Optional[List[str]] = None):
-        """Salva memória do prompt e resposta"""
-        memory_file = Path("MEMORIES.json")
+        """Salva interação na memória"""
+        memory = {
+            "timestamp": time.time(),
+            "prompt": prompt,
+            "response": response,
+            "agent_type": agent_type,
+            "model_id": model_id,
+            "context_used": context_used or [],
+            "tags": self._extract_tags(prompt)
+        }
         
-        try:
-            if memory_file.exists():
-                with open(memory_file, 'r', encoding='utf-8') as f:
-                    memories = json.load(f)
-            else:
-                memories = {
-                    "version": "1.0.0",
-                    "prompt_memories": [],
-                    "last_update": datetime.now().isoformat()
-                }
-            
-            memory_entry = {
-                "id": f"mem_{len(memories.get('prompt_memories', [])) + 1}",
-                "timestamp": datetime.now().isoformat(),
-                "prompt": prompt,
-                "response": response,
-                "agent_type": agent_type,
-                "model_id": model_id,
-                "context_used": context_used or [],
-                "tags": self._extract_tags(prompt)
-            }
-            
-            memories.setdefault("prompt_memories", []).append(memory_entry)
-            memories["last_update"] = datetime.now().isoformat()
-            
-            with open(memory_file, 'w', encoding='utf-8') as f:
-                json.dump(memories, f, indent=2, ensure_ascii=False)
-            
-            self.logger.info(f"Memória salva: {memory_entry['id']}")
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao salvar memória: {e}")
+        self.memories.append(memory)
+        self._save_memories()
     
     def _extract_tags(self, prompt: str) -> List[str]:
         """Extrai tags relevantes do prompt"""
@@ -555,75 +336,43 @@ class OpenRouterManager:
         prompt_lower = prompt.lower()
         
         # Tags baseadas em palavras-chave
-        if any(word in prompt_lower for word in ["prd", "requirements", "document"]):
-            tags.append("prd")
-        if any(word in prompt_lower for word in ["task", "todo", "development"]):
-            tags.append("tasks")
-        if any(word in prompt_lower for word in ["n8n", "workflow", "automation"]):
+        if "código" in prompt_lower or "programação" in prompt_lower:
+            tags.append("code")
+        if "análise" in prompt_lower or "analisar" in prompt_lower:
+            tags.append("analysis")
+        if "criativo" in prompt_lower or "ideia" in prompt_lower:
+            tags.append("creative")
+        if "docker" in prompt_lower:
+            tags.append("docker")
+        if "n8n" in prompt_lower:
             tags.append("n8n")
-        if any(word in prompt_lower for word in ["deploy", "docker", "infrastructure"]):
-            tags.append("deploy")
-        if any(word in prompt_lower for word in ["chat", "conversation", "assistant"]):
-            tags.append("chat")
         
         return tags
     
     def get_memories(self, search_term: Optional[str] = None, 
                     agent_type: Optional[str] = None) -> List[Dict]:
-        """Obtém memórias filtradas"""
-        memory_file = Path("MEMORIES.json")
+        """Busca memórias por termo ou tipo de agente"""
+        filtered = self.memories
         
-        if not memory_file.exists():
-            return []
+        if search_term:
+            search_lower = search_term.lower()
+            filtered = [m for m in filtered if 
+                       search_lower in m["prompt"].lower() or 
+                       search_lower in m["response"].lower()]
         
-        try:
-            with open(memory_file, 'r', encoding='utf-8') as f:
-                memories = json.load(f)
-            
-            prompt_memories = memories.get("prompt_memories", [])
-            
-            # Filtrar por termo de busca
-            if search_term:
-                search_lower = search_term.lower()
-                prompt_memories = [
-                    m for m in prompt_memories
-                    if (search_lower in m.get("prompt", "").lower() or
-                        search_lower in m.get("response", "").lower() or
-                        any(search_lower in tag.lower() for tag in m.get("tags", [])))
-                ]
-            
-            # Filtrar por tipo de agente
-            if agent_type:
-                prompt_memories = [
-                    m for m in prompt_memories
-                    if m.get("agent_type") == agent_type
-                ]
-            
-            return prompt_memories
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao carregar memórias: {e}")
-            return []
+        if agent_type:
+            filtered = [m for m in filtered if m["agent_type"] == agent_type]
+        
+        return filtered
     
     def get_agent_types(self) -> Dict[str, Dict]:
-        """Obtém tipos de agente disponíveis"""
+        """Retorna tipos de agentes disponíveis"""
         return self.agent_types
     
     def get_status(self) -> Dict[str, Any]:
-        """Obtém status do manager"""
+        """Retorna status do manager"""
         return {
             "api_key_configured": self.check_api_key(),
-            "models_cached": len(self.models_cache),
-            "last_update": self.last_update.isoformat() if self.last_update else None,
-            "session_active": self.session is not None,
-            "rate_limits": {
-                "requests_per_minute": self.max_requests_per_minute,
-                "requests_per_day": self.max_requests_per_day
-            }
-        }
-    
-    async def close(self):
-        """Fecha a sessão HTTP"""
-        if self.session:
-            await self.session.close()
-            self.session = None 
+            "memories_count": len(self.memories),
+            "agent_types": list(self.agent_types.keys())
+        } 
