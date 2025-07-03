@@ -115,13 +115,33 @@ class OpenRouterManager:
                         models = []
                         
                         for model_data in data.get("data", []):
+                            # Extrair empresa do nome do modelo se não estiver disponível
+                            company = model_data.get("company", "Unknown")
+                            if company == "Unknown":
+                                # Tentar extrair empresa do nome do modelo
+                                name = model_data.get("name", "")
+                                if ":" in name:
+                                    company = name.split(":")[0].strip()
+                                elif " " in name and any(keyword in name.lower() for keyword in ["gpt", "claude", "gemini", "llama"]):
+                                    # Detectar empresas conhecidas
+                                    if "gpt" in name.lower():
+                                        company = "OpenAI"
+                                    elif "claude" in name.lower():
+                                        company = "Anthropic"
+                                    elif "gemini" in name.lower():
+                                        company = "Google"
+                                    elif "llama" in name.lower():
+                                        company = "Meta"
+                                    else:
+                                        company = name.split(" ")[0]
+                            
                             model = OpenRouterModel(
                                 id=model_data["id"],
                                 name=model_data["name"],
                                 description=model_data.get("description", ""),
                                 context_length=model_data.get("context_length", 0),
                                 pricing=model_data.get("pricing", {}),
-                                company=model_data.get("company", "Unknown"),
+                                company=company,
                                 is_free=self._is_model_free(model_data),
                                 tags=model_data.get("tags", [])
                             )
@@ -142,7 +162,30 @@ class OpenRouterManager:
     def _is_model_free(self, model_data: Dict) -> bool:
         """Verifica se o modelo é gratuito"""
         pricing = model_data.get("pricing", {})
-        return pricing.get("prompt", 0) == 0 and pricing.get("completion", 0) == 0
+        name = model_data.get("name", "").lower()
+        
+        # Obter preços (podem vir como string ou número)
+        prompt_price = pricing.get("prompt", 0)
+        completion_price = pricing.get("completion", 0)
+        
+        # Converter para float se for string
+        try:
+            prompt_price = float(prompt_price) if prompt_price is not None else 0
+            completion_price = float(completion_price) if completion_price is not None else 0
+        except (ValueError, TypeError):
+            prompt_price = 0
+            completion_price = 0
+        
+        # Critérios para modelo gratuito
+        is_free = (
+            prompt_price == 0 and completion_price == 0 or
+            "free" in name or
+            "gpt-4o-mini" in name or  # Modelo conhecido como gratuito
+            pricing.get("free", False) or
+            model_data.get("free", False)
+        )
+        
+        return is_free
     
     def filter_models(self, models: List[OpenRouterModel], 
                      company: Optional[str] = None,
@@ -193,7 +236,9 @@ class OpenRouterManager:
             async with aiohttp.ClientSession() as session:
                 headers = {
                     "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/your-repo",  # OpenRouter requer
+                    "X-Title": "SUPER_AGENT_MCP_DOCKER_N8N"  # OpenRouter requer
                 }
                 
                 payload = {
@@ -202,6 +247,10 @@ class OpenRouterManager:
                     "temperature": 0.7,
                     "max_tokens": 2000
                 }
+                
+                self.logger.info(f"Enviando requisição para modelo: {model_id}")
+                self.logger.debug(f"Headers: {headers}")
+                self.logger.debug(f"Payload: {payload}")
                 
                 async with session.post(f"{self.base_url}/chat/completions", 
                                       headers=headers, json=payload) as response:
@@ -215,6 +264,7 @@ class OpenRouterManager:
                         }
                     else:
                         error_text = await response.text()
+                        self.logger.error(f"Erro na API OpenRouter: Status {response.status}, Response: {error_text}")
                         return {"error": f"Erro na API: {error_text}"}
                         
         except Exception as e:
